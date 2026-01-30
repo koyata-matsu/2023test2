@@ -139,21 +139,25 @@ const templateOptions = [
   { value: "病棟事務", label: "病棟事務" }
 ];
 
-const steps = [
-  { key: "template", label: "1.勤務者登録を行う" },
-  { key: "sheet", label: "2.年月を選びシートを作成" },
-  { key: "settings", label: "3.条件を調整する" },
-  { key: "shifted", label: "4.シフト作成をする" }
-];
-
 const app = document.getElementById("app");
 
-const createOnboardingState = () => ({
-  template: false,
-  sheet: false,
-  settings: false,
-  shifted: false
+const createEmptyStaff = () => ({
+  name: "",
+  employment: "",
+  shiftType: "",
+  ward: "",
+  availabilityType: "all",
+  availableWeekdays: [],
+  dayMin: "",
+  dayMax: "",
+  nightMin: "",
+  nightMax: ""
 });
+
+const initialGroups = templateOptions.map((option) => ({
+  name: option.value,
+  staff: structuredClone(initialStaff)
+}));
 
 const state = {
   view: "login",
@@ -165,12 +169,12 @@ const state = {
   ownerMode: true,
   sheet: null,
   sheets: [],
-  templates: [],
+  groups: structuredClone(initialGroups),
+  groupDraftName: templateOptions[0].value,
   currentSheetId: null,
   fixedDays: new Set(),
-  onboarding: createOnboardingState(),
   warningMessage: "入力内容を確認してください。",
-  selectedTemplate: templateOptions[0].value
+  selectedGroup: templateOptions[0].value
 };
 
 const buildDays = (year, month) => {
@@ -197,8 +201,6 @@ const formatTimestamp = (date) => {
   return `${year}/${month}/${day} ${hours}:${minutes}`;
 };
 
-const getNextStepKey = () => steps.find((step) => !state.onboarding[step.key])?.key;
-
 const getAvailabilityTag = (person) => {
   if (person.availabilityType === "weekday") {
     return "平日のみ";
@@ -213,6 +215,27 @@ const getAvailabilityTag = (person) => {
   return "";
 };
 
+const getAvailabilityLabel = (person) => {
+  if (person.availabilityType === "weekday") {
+    return "平日のみ";
+  }
+  if (person.availabilityType === "specific") {
+    const days =
+      person.availableWeekdays && person.availableWeekdays.length > 0
+        ? person.availableWeekdays.join("")
+        : "未設定";
+    return `曜日:${days}`;
+  }
+  return "全日";
+};
+
+const formatShiftLimits = (person) => {
+  const day = person.dayMin || person.dayMax ? `${person.dayMin || "-"}〜${person.dayMax || "-"}` : "-";
+  const night =
+    person.nightMin || person.nightMax ? `${person.nightMin || "-"}〜${person.nightMax || "-"}` : "-";
+  return `日:${day} / 夜:${night}`;
+};
+
 const isStaffAvailableForDay = (person, day) => {
   if (person.availabilityType === "weekday") {
     return day.weekday !== "土" && day.weekday !== "日";
@@ -225,24 +248,6 @@ const isStaffAvailableForDay = (person, day) => {
   }
   return true;
 };
-
-const renderTodoList = () => `
-  <section class="todo">
-    <h2>やることリスト</h2>
-    <ul>
-      ${steps
-        .map((step) => {
-          const done = state.onboarding[step.key];
-          const active = step.key === getNextStepKey();
-          return `<li class="${done ? "done" : ""} ${active ? "active" : ""}">
-            <span class="check">${done ? "✓" : active ? "▶" : ""}</span>
-            <span>${step.label}</span>
-          </li>`;
-        })
-        .join("")}
-    </ul>
-  </section>
-`;
 
 const renderSidePanel = () => `
   <aside class="side-panel">
@@ -259,25 +264,7 @@ const renderSidePanel = () => `
     `
         : ""
     }
-    ${renderTodoList()}
   </aside>
-`;
-
-const renderSteps = () => `
-  <section class="steps">
-    ${steps
-      .map((step) => {
-        const done = state.onboarding[step.key];
-        const active = step.key === getNextStepKey();
-        return `<div class="step ${done ? "done" : ""} ${
-          active ? "active" : ""
-        }">
-          <span class="step-indicator">${done ? "✓" : active ? "▶" : ""}</span>
-          <span class="step-label">${step.label}</span>
-        </div>`;
-      })
-      .join("")}
-  </section>
 `;
 
 const renderLogin = () => `
@@ -360,47 +347,42 @@ const renderStaffRows = () => {
     .join("");
 };
 
-const renderTemplate = () => `
+const renderGroupCreation = () => `
   <div class="page">
     <header class="app-header">
       <div>
-        <p class="eyebrow">勤務者登録</p>
-        <h1>${state.owner.email}</h1>
+        <p class="eyebrow">グループ作成</p>
+        <h1>勤務者登録</h1>
       </div>
       <div class="header-actions">
-        <button class="ghost" id="logout">ログアウト</button>
+        <button class="ghost" id="back-to-dashboard">戻る</button>
       </div>
     </header>
 
     <div class="layout">
       <div>
-        ${renderSteps()}
         <section class="controls">
           <div class="control-group">
             <label>
               グループ名
-              <select id="template-name-select">
-                ${templateOptions
-                  .map(
-                    (option) =>
-                      `<option value="${option.value}" ${
-                        option.value === state.selectedTemplate ? "selected" : ""
-                      }>${option.label}</option>`
-                  )
-                  .join("")}
-              </select>
+              <input id="group-name" type="text" value="${state.groupDraftName}" list="group-suggestions" />
             </label>
-            <button class="primary" id="save-template">勤務者登録を保存</button>
+            <button class="primary" id="save-group">勤務者登録を保存</button>
+            <button class="ghost" id="add-staff">勤務者を追加</button>
           </div>
-          <span class="helper-text">勤務者登録を保存すると新規シフト表が作成できます。</span>
+          <span class="helper-text">グループ名を決めて勤務者を登録してください。</span>
         </section>
 
         <section class="sheet">
-          <table class="shift-table" aria-label="テンプレートスタッフ一覧">
+          <table class="shift-table" aria-label="勤務者登録一覧">
             <thead>
               <tr>
                 <th class="corner-cell">氏名</th>
-                <th class="day-cell">スタッフ設定</th>
+                <th class="day-cell">雇用</th>
+                <th class="day-cell">勤務</th>
+                <th class="day-cell">病棟</th>
+                <th class="day-cell">曜日指定</th>
+                <th class="day-cell">日数</th>
               </tr>
             </thead>
             <tbody>
@@ -410,18 +392,15 @@ const renderTemplate = () => `
                     <tr data-row="${rowIndex}">
                       <th class="name-cell">
                         <div class="name-block">
-                          <div class="name">${person.name}</div>
-                          <div class="tags">
-                            ${person.employment ? `<span class="tag">${person.employment}</span>` : ""}
-                            ${person.shiftType ? `<span class="tag">${person.shiftType}</span>` : ""}
-                            ${person.ward ? `<span class="tag">${person.ward}</span>` : ""}
-                            ${getAvailabilityTag(person) ? `<span class="tag">${getAvailabilityTag(person)}</span>` : ""}
-                          </div>
+                          <div class="name">${person.name || "（未入力）"}</div>
+                          <button class="edit-button" data-row="${rowIndex}">編集</button>
                         </div>
                       </th>
-                      <td class="template-cell">
-                        <button class="settings-button icon-button" data-row="${rowIndex}" aria-label="スタッフ設定">⚙</button>
-                      </td>
+                      <td>${person.employment || "-"}</td>
+                      <td>${person.shiftType || "-"}</td>
+                      <td>${person.ward || "-"}</td>
+                      <td>${getAvailabilityLabel(person)}</td>
+                      <td>${formatShiftLimits(person)}</td>
                     </tr>
                   `
                 )
@@ -429,31 +408,23 @@ const renderTemplate = () => `
             </tbody>
           </table>
         </section>
-
-        <section class="sheet-list">
-          <h3 class="section-title">登録済みグループ</h3>
-          ${
-            state.templates.length === 0
-              ? `<p class="helper-text">まだ勤務者登録がありません。</p>`
-              : `<div class="template-tags">
-                  ${state.templates
-                    .map((template) => `<span class="tag">${template}</span>`)
-                    .join("")}
-                </div>`
-          }
-        </section>
       </div>
       ${renderSidePanel()}
     </div>
+    <datalist id="group-suggestions">
+      ${templateOptions
+        .map((option) => `<option value="${option.value}"></option>`)
+        .join("")}
+    </datalist>
   </div>
 `;
 
-const renderSheetList = () => `
+const renderDashboard = () => `
   <div class="page">
     <header class="app-header">
       <div>
-        <p class="eyebrow">シフト表一覧</p>
-        <h1>${state.owner.email} のシフト表一覧</h1>
+        <p class="eyebrow">ダッシュボード</p>
+        <h1>${state.owner.email}</h1>
       </div>
       <div class="header-actions">
         <button class="ghost" id="logout">ログアウト</button>
@@ -462,26 +433,12 @@ const renderSheetList = () => `
 
     <div class="layout">
       <div>
-        ${renderSteps()}
         <section class="controls">
           <div class="control-group">
-            <button class="primary" id="new-sheet" ${
-              state.templates.length === 0 ? "disabled" : ""
-            }>新規作成</button>
-            ${
-              state.templates.length === 0
-                ? `<button class="ghost" id="start-template">勤務者登録を始める</button>`
-                : ""
-            }
+            <button class="primary" id="create-group">グループを作成する</button>
+            <button class="accent" id="new-sheet">シフトシートを作成する</button>
           </div>
-          <span class="helper-text">
-            新規作成は一覧画面からのみ行えます。
-            ${
-              state.templates.length === 0
-                ? "勤務者登録がない場合は先に登録してください。"
-                : ""
-            }
-          </span>
+          <span class="helper-text">グループ作成後にシフトシートを作成できます。</span>
         </section>
 
         <section class="sheet-list">
@@ -493,7 +450,7 @@ const renderSheetList = () => `
                     <div class="sheet-card">
                       <div>
                         <h3>${sheet.year}年${sheet.month}月</h3>
-                        <p class="sheet-meta">グループ: ${sheet.template}</p>
+                        <p class="sheet-meta">グループ: ${sheet.groupName}</p>
                         <p class="sheet-meta">更新: ${formatTimestamp(sheet.generatedAt)}</p>
                       </div>
                       <div class="sheet-actions">
@@ -566,17 +523,15 @@ const renderSheet = () => {
         <div>
           <p class="eyebrow">シフト表</p>
           <h1>${state.sheet.year}年${state.sheet.month}月 ${generatedAt}</h1>
-          <p class="sheet-meta">グループ: ${state.sheet.template || "-"}</p>
+          <p class="sheet-meta">グループ: ${state.sheet.groupName || "-"}</p>
         </div>
         <div class="header-actions">
-          <button class="ghost" id="back-to-list">一覧に戻る</button>
+          <button class="ghost" id="back-to-dashboard">一覧に戻る</button>
         </div>
       </header>
 
       <div class="layout">
         <div>
-          ${renderSteps()}
-
           <section class="sheet">
             <table class="shift-table" aria-label="シフト調整表">
               <thead>
@@ -608,6 +563,10 @@ const renderSettingsDialog = () => `
         <h2><span class="settings-name"></span> の設定</h2>
         <button type="button" class="close-button" data-action="close">×</button>
       </header>
+      <label>
+        氏名
+        <input id="staff-name" type="text" placeholder="氏名を入力" />
+      </label>
       <label>
         雇用形態
         <select id="employment-select">
@@ -687,18 +646,16 @@ const renderSheetDialog = () => `
         <button type="button" class="close-button" data-action="close">×</button>
       </header>
       <label>
-        テンプレート
-        <select id="template-select" ${
-          state.templates.length === 0 ? "disabled" : ""
-        }>
-          ${state.templates.length === 0
+        グループ
+        <select id="group-select" ${state.groups.length === 0 ? "disabled" : ""}>
+          ${state.groups.length === 0
             ? `<option value="">勤務者登録が必要です</option>`
-            : state.templates
+            : state.groups
                 .map(
-                  (template) =>
-                    `<option value="${template}" ${
-                      template === state.selectedTemplate ? "selected" : ""
-                    }>${template}</option>`
+                  (group) =>
+                    `<option value="${group.name}" ${
+                      group.name === state.selectedGroup ? "selected" : ""
+                    }>${group.name}</option>`
                 )
                 .join("")}
         </select>
@@ -746,10 +703,10 @@ const renderApp = () => {
   let content = "";
   if (state.view === "login") {
     content = renderLogin();
-  } else if (state.view === "template") {
-    content = renderTemplate();
-  } else if (state.view === "list") {
-    content = renderSheetList();
+  } else if (state.view === "group") {
+    content = renderGroupCreation();
+  } else if (state.view === "dashboard") {
+    content = renderDashboard();
   } else if (state.view === "sheet") {
     content = renderSheet();
   }
@@ -783,12 +740,12 @@ const resetState = () => {
   state.ownerMode = true;
   state.sheet = null;
   state.sheets = [];
-  state.templates = [];
+  state.groups = structuredClone(initialGroups);
+  state.groupDraftName = templateOptions[0].value;
   state.currentSheetId = null;
   state.fixedDays = new Set();
-  state.onboarding = createOnboardingState();
   state.warningMessage = "入力内容を確認してください。";
-  state.selectedTemplate = templateOptions[0].value;
+  state.selectedGroup = templateOptions[0].value;
   renderApp();
 };
 
@@ -851,7 +808,6 @@ const applyAssignments = ({ randomize } = {}) => {
   });
 
   state.sheet.warnings = warnings;
-  state.onboarding.shifted = true;
   renderApp();
 };
 
@@ -862,6 +818,7 @@ const openSettingsPanel = (rowIndex) => {
   const panel = document.querySelector(".settings-panel");
   if (!(panel instanceof HTMLDialogElement)) return;
   panel.querySelector(".settings-name").textContent = person.name;
+  panel.querySelector("#staff-name").value = person.name;
   panel.querySelector("#employment-select").value = person.employment;
   panel.querySelector("#shift-type-select").value = person.shiftType;
   panel.querySelector("#ward-select").value = person.ward;
@@ -880,7 +837,7 @@ const openSettingsPanel = (rowIndex) => {
 };
 
 const startOwnerSession = () => {
-  state.view = state.templates.length === 0 ? "template" : "list";
+  state.view = "dashboard";
   state.ownerMode = true;
   renderApp();
 };
@@ -894,11 +851,15 @@ const openSheetFromList = (sheetId) => {
   const sheet = state.sheets.find((item) => item.id === sheetId);
   if (!sheet) return;
   state.currentSheetId = sheetId;
-  state.selectedTemplate = sheet.template;
+  state.selectedGroup = sheet.groupName;
+  const group = state.groups.find((item) => item.name === sheet.groupName);
+  if (group) {
+    state.staff = structuredClone(group.staff);
+  }
   state.sheet = {
     year: sheet.year,
     month: sheet.month,
-    template: sheet.template,
+    groupName: sheet.groupName,
     days: buildDays(sheet.year, sheet.month),
     warnings: [],
     generatedAt: sheet.generatedAt
@@ -929,36 +890,54 @@ document.body.addEventListener("click", (event) => {
         openDialog(".warning-dialog");
         return;
       }
-      state.onboarding = createOnboardingState();
       startOwnerSession();
     }
   }
 
-  if (target.id === "save-template") {
-    const templateSelect = document.getElementById("template-name-select");
-    if (templateSelect instanceof HTMLSelectElement) {
-      const templateName = templateSelect.value;
-      state.selectedTemplate = templateName;
-      if (!state.templates.includes(templateName)) {
-        state.templates = [templateName, ...state.templates];
-      }
-      state.onboarding.template = true;
-      state.view = "list";
-      renderApp();
-    }
+  if (target.id === "create-group") {
+    state.groupDraftName = "";
+    state.staff = [createEmptyStaff()];
+    state.view = "group";
+    renderApp();
   }
 
   if (target.id === "new-sheet") {
-    if (state.templates.length === 0) {
-      state.view = "template";
+    if (state.groups.length === 0) {
+      state.groupDraftName = "";
+      state.staff = [createEmptyStaff()];
+      state.view = "group";
       renderApp();
       return;
     }
     openDialog(".sheet-dialog");
   }
 
-  if (target.id === "start-template") {
-    state.view = "template";
+  if (target.id === "back-to-dashboard") {
+    state.view = "dashboard";
+    renderApp();
+  }
+
+  if (target.id === "add-staff") {
+    state.staff = [...state.staff, createEmptyStaff()];
+    renderApp();
+  }
+
+  if (target.id === "save-group") {
+    const nameInput = document.getElementById("group-name");
+    if (!(nameInput instanceof HTMLInputElement)) return;
+    const groupName = nameInput.value.trim();
+    if (!groupName) {
+      state.warningMessage = "グループ名を入力してください。";
+      openDialog(".warning-dialog");
+      return;
+    }
+    const newGroup = {
+      name: groupName,
+      staff: structuredClone(state.staff)
+    };
+    state.groups = [newGroup, ...state.groups.filter((group) => group.name !== groupName)];
+    state.selectedGroup = groupName;
+    state.view = "dashboard";
     renderApp();
   }
 
@@ -969,7 +948,7 @@ document.body.addEventListener("click", (event) => {
     applyAssignments({ randomize: true });
   }
 
-  if (target.classList.contains("settings-button")) {
+  if (target.classList.contains("settings-button") || target.classList.contains("edit-button")) {
     const rowIndex = Number(target.dataset.row);
     openSettingsPanel(rowIndex);
   }
@@ -994,11 +973,6 @@ document.body.addEventListener("click", (event) => {
 
   if (target.id === "logout") {
     resetState();
-  }
-
-  if (target.id === "back-to-list") {
-    state.view = "list";
-    renderApp();
   }
 
   if (target.dataset.action === "open-sheet") {
@@ -1050,6 +1024,7 @@ document.body.addEventListener("submit", (event) => {
   if (panel instanceof HTMLDialogElement) {
     event.preventDefault();
     const rowIndex = Number(panel.dataset.row);
+    const nameInput = panel.querySelector("#staff-name");
     const employmentSelect = panel.querySelector("#employment-select");
     const shiftTypeSelect = panel.querySelector("#shift-type-select");
     const wardSelect = panel.querySelector("#ward-select");
@@ -1060,6 +1035,7 @@ document.body.addEventListener("submit", (event) => {
     const nightMinInput = panel.querySelector("#night-min");
     const nightMaxInput = panel.querySelector("#night-max");
     if (
+      nameInput instanceof HTMLInputElement &&
       employmentSelect instanceof HTMLSelectElement &&
       shiftTypeSelect instanceof HTMLSelectElement &&
       wardSelect instanceof HTMLSelectElement &&
@@ -1069,6 +1045,7 @@ document.body.addEventListener("submit", (event) => {
       nightMinInput instanceof HTMLInputElement &&
       nightMaxInput instanceof HTMLInputElement
     ) {
+      state.staff[rowIndex].name = nameInput.value.trim();
       state.staff[rowIndex].employment = employmentSelect.value;
       state.staff[rowIndex].shiftType = shiftTypeSelect.value;
       state.staff[rowIndex].ward = wardSelect.value;
@@ -1081,7 +1058,6 @@ document.body.addEventListener("submit", (event) => {
       state.staff[rowIndex].dayMax = dayMaxInput.value;
       state.staff[rowIndex].nightMin = nightMinInput.value;
       state.staff[rowIndex].nightMax = nightMaxInput.value;
-      state.onboarding.settings = true;
       renderApp();
     }
     panel.close();
@@ -1091,13 +1067,13 @@ document.body.addEventListener("submit", (event) => {
     event.preventDefault();
     const yearInput = document.getElementById("sheet-year");
     const monthInput = document.getElementById("sheet-month");
-    const templateSelect = document.getElementById("template-select");
+    const groupSelect = document.getElementById("group-select");
     if (
       yearInput instanceof HTMLInputElement &&
       monthInput instanceof HTMLInputElement &&
-      templateSelect instanceof HTMLSelectElement
+      groupSelect instanceof HTMLSelectElement
     ) {
-      if (!templateSelect.value) {
+      if (!groupSelect.value) {
         state.warningMessage = "勤務者登録が必要です。";
         openDialog(".warning-dialog");
         return;
@@ -1105,12 +1081,16 @@ document.body.addEventListener("submit", (event) => {
       const year = Number(yearInput.value || new Date().getFullYear());
       const month = Number(monthInput.value || new Date().getMonth() + 1);
       const sheetId = `${year}-${month}`;
-      state.selectedTemplate = templateSelect.value;
+      state.selectedGroup = groupSelect.value;
+      const group = state.groups.find((item) => item.name === state.selectedGroup);
+      if (group) {
+        state.staff = structuredClone(group.staff);
+      }
       const newSheet = {
         id: sheetId,
         year,
         month,
-        template: state.selectedTemplate,
+        groupName: state.selectedGroup,
         generatedAt: new Date()
       };
       state.sheets = [newSheet, ...state.sheets.filter((item) => item.id !== sheetId)];
@@ -1118,14 +1098,13 @@ document.body.addEventListener("submit", (event) => {
       state.sheet = {
         year,
         month,
-        template: state.selectedTemplate,
+        groupName: state.selectedGroup,
         days: buildDays(year, month),
         warnings: [],
         generatedAt: new Date()
       };
       state.fixedDays.clear();
       state.view = "sheet";
-      state.onboarding.sheet = true;
       renderApp();
     }
     sheetPanel.close();

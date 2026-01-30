@@ -447,6 +447,17 @@ body {
   gap: 4px;
 }
 
+.edit-button {
+  margin-top: 6px;
+  align-self: flex-start;
+  border: 1px solid #cbd5f5;
+  border-radius: 8px;
+  padding: 4px 10px;
+  background: #ffffff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
 .tag {
   background: #e2e8f0;
   border-radius: 999px;
