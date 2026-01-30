@@ -18,6 +18,11 @@ body {
   padding: 24px 16px 48px;
 }
 
+.page.login {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
 .app-header {
   display: flex;
   align-items: center;
@@ -45,6 +50,35 @@ body {
   background: #eef2ff;
   padding: 10px 16px;
   border-radius: 999px;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card label,
+.settings-content label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.card input,
+.settings-content input,
+.settings-content select {
+  border: 1px solid #cbd5f5;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  background: #ffffff;
 }
 
 .controls {
@@ -99,6 +133,18 @@ body {
   color: #ffffff;
 }
 
+.control-group .ghost {
+  background: #e2e8f0;
+  color: #1f2937;
+}
+
+.control-group .ghost:disabled,
+.control-group .accent:disabled,
+.control-group .primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .helper-text {
   font-size: 12px;
   color: #6b7280;
@@ -107,6 +153,19 @@ body {
 .owner-toggle {
   font-weight: 600;
   color: #1f2937;
+}
+
+.url-label {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.url-value {
+  font-size: 13px;
+  background: #ffffff;
+  border: 1px dashed #cbd5f5;
+  padding: 6px 10px;
+  border-radius: 8px;
 }
 
 .sheet {
@@ -197,12 +256,38 @@ body {
   cursor: pointer;
 }
 
-body[data-owner="false"] .settings-button {
+.settings-button:disabled {
   opacity: 0.4;
   pointer-events: none;
 }
 
-.settings-panel {
+.template-cell {
+  text-align: center;
+}
+
+.date-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fix-button {
+  border: 1px solid #cbd5f5;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.day-cell.warning {
+  background: #fee2e2;
+}
+
+.settings-panel,
+.sheet-dialog,
+.warning-dialog {
   border: none;
   border-radius: 16px;
   padding: 0;
@@ -210,7 +295,9 @@ body[data-owner="false"] .settings-button {
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
 }
 
-.settings-panel::backdrop {
+.settings-panel::backdrop,
+.sheet-dialog::backdrop,
+.warning-dialog::backdrop {
   background: rgba(15, 23, 42, 0.4);
 }
 
@@ -231,22 +318,6 @@ body[data-owner="false"] .settings-button {
 .settings-content h2 {
   font-size: 18px;
   margin: 0;
-}
-
-.settings-content label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 13px;
-  color: #475569;
-}
-
-.settings-content select {
-  border: 1px solid #cbd5f5;
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 14px;
-  background: #ffffff;
 }
 
 .panel-actions {
@@ -281,6 +352,12 @@ body[data-owner="false"] .settings-button {
   height: 32px;
   padding: 0;
   line-height: 1;
+}
+
+.warning-text {
+  margin: 0;
+  font-size: 14px;
+  color: #b91c1c;
 }
 
 .day-cell {
@@ -341,6 +418,15 @@ body[data-owner="false"] .settings-button {
   padding: 6px;
   font-size: 12px;
   background: #ffffff;
+}
+
+.manual-input {
+  width: 100%;
+  max-width: 120px;
+  border-radius: 6px;
+  border: 1px dashed #cbd5f5;
+  padding: 6px;
+  font-size: 12px;
 }
 
 .assigned-shift {
