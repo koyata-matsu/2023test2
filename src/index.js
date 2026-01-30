@@ -6,6 +6,8 @@ const initialStaff = [
     employment: "社員",
     shiftType: "どちらも",
     ward: "病棟Aのみ",
+    availabilityType: "all",
+    availableWeekdays: [],
     dayMin: "",
     dayMax: "",
     nightMin: "",
@@ -16,6 +18,8 @@ const initialStaff = [
     employment: "パート",
     shiftType: "昼専",
     ward: "病棟B・Cのみ",
+    availabilityType: "all",
+    availableWeekdays: [],
     dayMin: "",
     dayMax: "",
     nightMin: "",
@@ -26,6 +30,8 @@ const initialStaff = [
     employment: "社員",
     shiftType: "夜専",
     ward: "",
+    availabilityType: "all",
+    availableWeekdays: [],
     dayMin: "",
     dayMax: "",
     nightMin: "",
@@ -36,6 +42,8 @@ const initialStaff = [
     employment: "パート",
     shiftType: "昼専",
     ward: "病棟Aのみ",
+    availabilityType: "all",
+    availableWeekdays: [],
     dayMin: "",
     dayMax: "",
     nightMin: "",
@@ -46,6 +54,8 @@ const initialStaff = [
     employment: "社員",
     shiftType: "どちらも",
     ward: "",
+    availabilityType: "all",
+    availableWeekdays: [],
     dayMin: "",
     dayMax: "",
     nightMin: "",
@@ -56,6 +66,8 @@ const initialStaff = [
     employment: "パート",
     shiftType: "どちらも",
     ward: "",
+    availabilityType: "all",
+    availableWeekdays: [],
     dayMin: "",
     dayMax: "",
     nightMin: "",
@@ -66,6 +78,8 @@ const initialStaff = [
     employment: "社員",
     shiftType: "夜専",
     ward: "病棟B・Cのみ",
+    availabilityType: "all",
+    availableWeekdays: [],
     dayMin: "",
     dayMax: "",
     nightMin: "",
@@ -76,6 +90,8 @@ const initialStaff = [
     employment: "パート",
     shiftType: "どちらも",
     ward: "",
+    availabilityType: "all",
+    availableWeekdays: [],
     dayMin: "",
     dayMax: "",
     nightMin: "",
@@ -86,6 +102,8 @@ const initialStaff = [
     employment: "社員",
     shiftType: "どちらも",
     ward: "",
+    availabilityType: "all",
+    availableWeekdays: [],
     dayMin: "",
     dayMax: "",
     nightMin: "",
@@ -96,6 +114,8 @@ const initialStaff = [
     employment: "パート",
     shiftType: "どちらも",
     ward: "",
+    availabilityType: "all",
+    availableWeekdays: [],
     dayMin: "",
     dayMax: "",
     nightMin: "",
@@ -120,20 +140,11 @@ const templateOptions = [
 ];
 
 const steps = [
-  { key: "template", label: "1.テンプレートを作成する" },
+  { key: "template", label: "1.勤務者登録を行う" },
   { key: "sheet", label: "2.年月を選びシートを作成" },
-  { key: "settings", label: "3.設定を調整する" },
-  { key: "published", label: "4.公開する" },
-  { key: "shifted", label: "5.シフト作成をする" }
+  { key: "settings", label: "3.条件を調整する" },
+  { key: "shifted", label: "4.シフト作成をする" }
 ];
-
-const stepHints = {
-  template: "テンプレートを保存して新規シフト表を作成します。",
-  sheet: "テンプレートを選んで新規シフト表を作成してください。",
-  settings: "名前横の設定ボタンでスタッフ条件を調整します。",
-  published: "公開するボタンを押すと希望入力ができます。",
-  shifted: "シフトを自動作成を押して最終案を作ります。"
-};
 
 const app = document.getElementById("app");
 
@@ -141,7 +152,6 @@ const createOnboardingState = () => ({
   template: false,
   sheet: false,
   settings: false,
-  published: false,
   shifted: false
 });
 
@@ -153,15 +163,13 @@ const state = {
   },
   staff: structuredClone(initialStaff),
   ownerMode: true,
-  templateReady: false,
   sheet: null,
   sheets: [],
+  templates: [],
   currentSheetId: null,
-  published: false,
   fixedDays: new Set(),
   onboarding: createOnboardingState(),
   warningMessage: "入力内容を確認してください。",
-  publishMessage: "",
   selectedTemplate: templateOptions[0].value
 };
 
@@ -189,16 +197,34 @@ const formatTimestamp = (date) => {
   return `${year}/${month}/${day} ${hours}:${minutes}`;
 };
 
-const getSheetUrl = (sheet) => {
-  if (!sheet || !state.owner.email) return "";
-  const safeEmail = state.owner.email.replace(/[@.]/g, "_");
-  return `https://shift.local/${safeEmail}/${sheet.year}-${String(sheet.month).padStart(
-    2,
-    "0"
-  )}`;
+const getNextStepKey = () => steps.find((step) => !state.onboarding[step.key])?.key;
+
+const getAvailabilityTag = (person) => {
+  if (person.availabilityType === "weekday") {
+    return "平日のみ";
+  }
+  if (person.availabilityType === "specific") {
+    const days =
+      person.availableWeekdays && person.availableWeekdays.length > 0
+        ? person.availableWeekdays.join("")
+        : "曜日指定";
+    return `曜日:${days}`;
+  }
+  return "";
 };
 
-const getNextStepKey = () => steps.find((step) => !state.onboarding[step.key])?.key;
+const isStaffAvailableForDay = (person, day) => {
+  if (person.availabilityType === "weekday") {
+    return day.weekday !== "土" && day.weekday !== "日";
+  }
+  if (person.availabilityType === "specific") {
+    if (!person.availableWeekdays || person.availableWeekdays.length === 0) {
+      return false;
+    }
+    return person.availableWeekdays.includes(day.weekday);
+  }
+  return true;
+};
 
 const renderTodoList = () => `
   <section class="todo">
@@ -216,6 +242,25 @@ const renderTodoList = () => `
         .join("")}
     </ul>
   </section>
+`;
+
+const renderSidePanel = () => `
+  <aside class="side-panel">
+    ${
+      state.view === "sheet"
+        ? `
+      <section class="shift-action">
+        <h2>シフト作成</h2>
+        <button class="accent" id="auto-shift" ${
+          state.ownerMode ? "" : "disabled"
+        }>シフトを作成する</button>
+        <p class="helper-text">固定した日付は変更されません。</p>
+      </section>
+    `
+        : ""
+    }
+    ${renderTodoList()}
+  </aside>
 `;
 
 const renderSteps = () => `
@@ -264,7 +309,7 @@ const renderLogin = () => `
 `;
 
 const renderStaffRows = () => {
-  const canEditPreferences = state.ownerMode || state.published;
+  const canEditPreferences = state.ownerMode;
   return state.staff
     .map(
       (person, rowIndex) => `
@@ -276,6 +321,7 @@ const renderStaffRows = () => {
                 ${person.employment ? `<span class="tag">${person.employment}</span>` : ""}
                 ${person.shiftType ? `<span class="tag">${person.shiftType}</span>` : ""}
                 ${person.ward ? `<span class="tag">${person.ward}</span>` : ""}
+                ${getAvailabilityTag(person) ? `<span class="tag">${getAvailabilityTag(person)}</span>` : ""}
               </div>
             </div>
             <button class="settings-button icon-button" data-row="${rowIndex}" ${
@@ -318,7 +364,7 @@ const renderTemplate = () => `
   <div class="page">
     <header class="app-header">
       <div>
-        <p class="eyebrow">テンプレート作成</p>
+        <p class="eyebrow">勤務者登録</p>
         <h1>${state.owner.email}</h1>
       </div>
       <div class="header-actions">
@@ -331,8 +377,22 @@ const renderTemplate = () => `
         ${renderSteps()}
         <section class="controls">
           <div class="control-group">
-            <button class="primary" id="save-template">テンプレートを保存</button>
+            <label>
+              グループ名
+              <select id="template-name-select">
+                ${templateOptions
+                  .map(
+                    (option) =>
+                      `<option value="${option.value}" ${
+                        option.value === state.selectedTemplate ? "selected" : ""
+                      }>${option.label}</option>`
+                  )
+                  .join("")}
+              </select>
+            </label>
+            <button class="primary" id="save-template">勤務者登録を保存</button>
           </div>
+          <span class="helper-text">勤務者登録を保存すると新規シフト表が作成できます。</span>
         </section>
 
         <section class="sheet">
@@ -355,6 +415,7 @@ const renderTemplate = () => `
                             ${person.employment ? `<span class="tag">${person.employment}</span>` : ""}
                             ${person.shiftType ? `<span class="tag">${person.shiftType}</span>` : ""}
                             ${person.ward ? `<span class="tag">${person.ward}</span>` : ""}
+                            ${getAvailabilityTag(person) ? `<span class="tag">${getAvailabilityTag(person)}</span>` : ""}
                           </div>
                         </div>
                       </th>
@@ -368,8 +429,21 @@ const renderTemplate = () => `
             </tbody>
           </table>
         </section>
+
+        <section class="sheet-list">
+          <h3 class="section-title">登録済みグループ</h3>
+          ${
+            state.templates.length === 0
+              ? `<p class="helper-text">まだ勤務者登録がありません。</p>`
+              : `<div class="template-tags">
+                  ${state.templates
+                    .map((template) => `<span class="tag">${template}</span>`)
+                    .join("")}
+                </div>`
+          }
+        </section>
       </div>
-      ${renderTodoList()}
+      ${renderSidePanel()}
     </div>
   </div>
 `;
@@ -391,9 +465,23 @@ const renderSheetList = () => `
         ${renderSteps()}
         <section class="controls">
           <div class="control-group">
-            <button class="primary" id="new-sheet">新規作成</button>
+            <button class="primary" id="new-sheet" ${
+              state.templates.length === 0 ? "disabled" : ""
+            }>新規作成</button>
+            ${
+              state.templates.length === 0
+                ? `<button class="ghost" id="start-template">勤務者登録を始める</button>`
+                : ""
+            }
           </div>
-          <span class="helper-text">新規作成は一覧画面からのみ行えます。</span>
+          <span class="helper-text">
+            新規作成は一覧画面からのみ行えます。
+            ${
+              state.templates.length === 0
+                ? "勤務者登録がない場合は先に登録してください。"
+                : ""
+            }
+          </span>
         </section>
 
         <section class="sheet-list">
@@ -405,14 +493,10 @@ const renderSheetList = () => `
                     <div class="sheet-card">
                       <div>
                         <h3>${sheet.year}年${sheet.month}月</h3>
+                        <p class="sheet-meta">グループ: ${sheet.template}</p>
                         <p class="sheet-meta">更新: ${formatTimestamp(sheet.generatedAt)}</p>
                       </div>
                       <div class="sheet-actions">
-                        <span class="publish-status ${
-                          sheet.published ? "published" : "draft"
-                        }">
-                          ${sheet.published ? "公開中" : "非公開"}
-                        </span>
                         <button class="ghost" data-action="open-sheet" data-id="${
                           sheet.id
                         }">開く</button>
@@ -423,7 +507,7 @@ const renderSheetList = () => `
                 .join("")}
         </section>
       </div>
-      ${renderTodoList()}
+      ${renderSidePanel()}
     </div>
   </div>
 `;
@@ -456,15 +540,21 @@ const renderSheet = () => {
   const requiredInputs = state.sheet.days
     .map(
       (day) => `
-        <th class="required-cell">
-          <div class="required-label">日勤</div>
-          <input class="required-input" type="number" min="0" value="${
-            day.requiredDay
-          }" data-col="${day.index}" data-shift="day" />
-          <div class="required-label">夜勤</div>
-          <input class="required-input" type="number" min="0" value="${
-            day.requiredNight
-          }" data-col="${day.index}" data-shift="night" />
+        <th class="required-cell ${
+          state.sheet.warnings?.includes(day.index) ? "warning" : ""
+        }">
+          <div class="required-row">
+            <span class="required-label">日勤</span>
+            <input class="required-input" type="number" min="0" value="${
+              day.requiredDay
+            }" data-col="${day.index}" data-shift="day" />
+          </div>
+          <div class="required-row">
+            <span class="required-label">夜勤</span>
+            <input class="required-input" type="number" min="0" value="${
+              day.requiredNight
+            }" data-col="${day.index}" data-shift="night" />
+          </div>
         </th>
       `
     )
@@ -474,14 +564,11 @@ const renderSheet = () => {
     <div class="page">
       <header class="app-header">
         <div>
-          <p class="eyebrow">公開前シート</p>
+          <p class="eyebrow">シフト表</p>
           <h1>${state.sheet.year}年${state.sheet.month}月 ${generatedAt}</h1>
+          <p class="sheet-meta">グループ: ${state.sheet.template || "-"}</p>
         </div>
         <div class="header-actions">
-          <div class="header-note">URLを公開すると希望入力が可能</div>
-          <span class="publish-status ${state.published ? "published" : "draft"}">
-            ${state.published ? "公開中" : "非公開"}
-          </span>
           <button class="ghost" id="back-to-list">一覧に戻る</button>
         </div>
       </header>
@@ -489,35 +576,6 @@ const renderSheet = () => {
       <div class="layout">
         <div>
           ${renderSteps()}
-
-          <section class="controls">
-            <div class="control-group">
-              <button class="ghost" id="publish-sheet" ${
-                state.ownerMode ? "" : "disabled"
-              }>${state.published ? "公開を解除" : "公開する"}</button>
-            </div>
-            ${
-              state.published
-                ? `
-            <div class="control-group">
-              <span class="url-label">URL</span>
-              <span class="url-value">${getSheetUrl(state.sheet)}</span>
-            </div>
-            `
-                : ""
-            }
-          </section>
-
-          <section class="controls">
-            <div class="control-group">
-              <button class="accent" id="auto-shift" ${
-                state.ownerMode && state.published ? "" : "disabled"
-              }>シフトを自動作成</button>
-            </div>
-            <div class="control-group">
-              <span class="helper-text">固定した日付は変更されません。</span>
-            </div>
-          </section>
 
           <section class="sheet">
             <table class="shift-table" aria-label="シフト調整表">
@@ -537,7 +595,7 @@ const renderSheet = () => {
             </table>
           </section>
         </div>
-        ${renderTodoList()}
+        ${renderSidePanel()}
       </div>
     </div>
   `;
@@ -575,6 +633,26 @@ const renderSettingsDialog = () => `
           <option value="病棟B・Cのみ">病棟B・Cのみ</option>
         </select>
       </label>
+      <label>
+        勤務可能日
+        <select id="availability-select">
+          <option value="all">全日</option>
+          <option value="weekday">平日のみ</option>
+          <option value="specific">曜日指定</option>
+        </select>
+      </label>
+      <div class="weekday-grid">
+        ${weekdayLabels
+          .map(
+            (label) => `
+              <label class="weekday-option">
+                <input type="checkbox" name="weekday" value="${label}" />
+                ${label}
+              </label>
+            `
+          )
+          .join("")}
+      </div>
       <div class="limit-grid">
         <label>
           昼・最低
@@ -610,13 +688,19 @@ const renderSheetDialog = () => `
       </header>
       <label>
         テンプレート
-        <select id="template-select">
-          ${templateOptions
-            .map(
-              (option) =>
-                `<option value="${option.value}">${option.label}</option>`
-            )
-            .join("")}
+        <select id="template-select" ${
+          state.templates.length === 0 ? "disabled" : ""
+        }>
+          ${state.templates.length === 0
+            ? `<option value="">勤務者登録が必要です</option>`
+            : state.templates
+                .map(
+                  (template) =>
+                    `<option value="${template}" ${
+                      template === state.selectedTemplate ? "selected" : ""
+                    }>${template}</option>`
+                )
+                .join("")}
         </select>
       </label>
       <label>
@@ -657,48 +741,6 @@ const renderWarningDialog = () => `
   </dialog>
 `;
 
-const renderPublishDialog = () => `
-  <dialog class="publish-dialog">
-    <form method="dialog" class="settings-content">
-      <header>
-        <h2>公開情報</h2>
-        <button type="button" class="close-button" data-action="close">×</button>
-      </header>
-      <p>${state.publishMessage}</p>
-      ${
-        state.published && state.sheet
-          ? `<div class="url-block">
-              <span class="url-label">URL</span>
-              <span class="url-value">${getSheetUrl(state.sheet)}</span>
-            </div>`
-          : ""
-      }
-      <div class="panel-actions">
-        <button type="submit" class="primary" data-action="close">OK</button>
-      </div>
-    </form>
-  </dialog>
-`;
-
-const renderGuideDialog = () => {
-  const stepKey = getNextStepKey();
-  if (!stepKey) return "";
-  const text = stepHints[stepKey];
-  return `
-    <dialog class="guide-dialog" data-step="${stepKey}">
-      <form method="dialog" class="settings-content">
-        <header>
-          <h2>次にやること</h2>
-          <button type="button" class="close-button" data-action="close">×</button>
-        </header>
-        <p>${text}</p>
-        <div class="panel-actions">
-          <button type="submit" class="primary" data-action="guide-ok">OK</button>
-        </div>
-      </form>
-    </dialog>
-  `;
-};
 
 const renderApp = () => {
   let content = "";
@@ -717,18 +759,7 @@ const renderApp = () => {
     ${renderSettingsDialog()}
     ${renderSheetDialog()}
     ${renderWarningDialog()}
-    ${renderPublishDialog()}
-    ${renderGuideDialog()}
   `;
-
-  const guideDialog = document.querySelector(".guide-dialog");
-  if (
-    guideDialog instanceof HTMLDialogElement &&
-    state.view !== "login" &&
-    !guideDialog.open
-  ) {
-    guideDialog.showModal();
-  }
 };
 
 const openDialog = (selector) => {
@@ -750,15 +781,13 @@ const resetState = () => {
   state.owner = { email: "", password: "" };
   state.staff = structuredClone(initialStaff);
   state.ownerMode = true;
-  state.templateReady = false;
   state.sheet = null;
   state.sheets = [];
+  state.templates = [];
   state.currentSheetId = null;
-  state.published = false;
   state.fixedDays = new Set();
   state.onboarding = createOnboardingState();
   state.warningMessage = "入力内容を確認してください。";
-  state.publishMessage = "";
   state.selectedTemplate = templateOptions[0].value;
   renderApp();
 };
@@ -781,6 +810,10 @@ const applyAssignments = ({ randomize } = {}) => {
     const availableDay = [];
     const availableNight = [];
     columnCells.forEach((cell) => {
+      const rowIndex = Number(cell.dataset.row);
+      const person = state.staff[rowIndex];
+      if (!person) return;
+      if (!isStaffAvailableForDay(person, day)) return;
       const select = cell.querySelector(".preference-select");
       if (!select) return;
       const value = select.value;
@@ -832,6 +865,12 @@ const openSettingsPanel = (rowIndex) => {
   panel.querySelector("#employment-select").value = person.employment;
   panel.querySelector("#shift-type-select").value = person.shiftType;
   panel.querySelector("#ward-select").value = person.ward;
+  panel.querySelector("#availability-select").value = person.availabilityType;
+  const weekdayInputs = Array.from(panel.querySelectorAll('input[name="weekday"]'));
+  weekdayInputs.forEach((input) => {
+    input.checked = person.availableWeekdays.includes(input.value);
+    input.disabled = person.availabilityType !== "specific";
+  });
   panel.querySelector("#day-min").value = person.dayMin;
   panel.querySelector("#day-max").value = person.dayMax;
   panel.querySelector("#night-min").value = person.nightMin;
@@ -840,17 +879,8 @@ const openSettingsPanel = (rowIndex) => {
   panel.showModal();
 };
 
-const openWarningDialog = () => {
-  if (!state.ownerMode) return;
-  openDialog(".warning-dialog");
-};
-
-const openPublishDialog = () => {
-  openDialog(".publish-dialog");
-};
-
 const startOwnerSession = () => {
-  state.view = "list";
+  state.view = state.templates.length === 0 ? "template" : "list";
   state.ownerMode = true;
   renderApp();
 };
@@ -864,14 +894,15 @@ const openSheetFromList = (sheetId) => {
   const sheet = state.sheets.find((item) => item.id === sheetId);
   if (!sheet) return;
   state.currentSheetId = sheetId;
+  state.selectedTemplate = sheet.template;
   state.sheet = {
     year: sheet.year,
     month: sheet.month,
+    template: sheet.template,
     days: buildDays(sheet.year, sheet.month),
     warnings: [],
     generatedAt: sheet.generatedAt
   };
-  state.published = sheet.published;
   state.view = "sheet";
   renderApp();
 };
@@ -899,49 +930,43 @@ document.body.addEventListener("click", (event) => {
         return;
       }
       state.onboarding = createOnboardingState();
-      state.templateReady = false;
       startOwnerSession();
     }
   }
 
   if (target.id === "save-template") {
-    state.templateReady = true;
-    state.onboarding.template = true;
-    renderApp();
-    openDialog(".sheet-dialog");
+    const templateSelect = document.getElementById("template-name-select");
+    if (templateSelect instanceof HTMLSelectElement) {
+      const templateName = templateSelect.value;
+      state.selectedTemplate = templateName;
+      if (!state.templates.includes(templateName)) {
+        state.templates = [templateName, ...state.templates];
+      }
+      state.onboarding.template = true;
+      state.view = "list";
+      renderApp();
+    }
   }
 
   if (target.id === "new-sheet") {
+    if (state.templates.length === 0) {
+      state.view = "template";
+      renderApp();
+      return;
+    }
     openDialog(".sheet-dialog");
   }
 
-  if (target.id === "publish-sheet" && state.ownerMode) {
-    state.published = !state.published;
-    state.onboarding.published = state.published;
-    const sheetIndex = state.sheets.findIndex(
-      (sheet) => sheet.id === state.currentSheetId
-    );
-    if (sheetIndex !== -1) {
-      state.sheets[sheetIndex].published = state.published;
-      state.sheets[sheetIndex].generatedAt = new Date();
-    }
-    state.publishMessage = state.published
-      ? "公開しました。URLを共有してください。"
-      : "非公開にしました。";
+  if (target.id === "start-template") {
+    state.view = "template";
     renderApp();
-    openPublishDialog();
   }
 
   if (target.id === "auto-shift" && state.ownerMode) {
-    if (!state.published) {
-      state.warningMessage = "公開後にシフトを自動作成できます。";
-      openDialog(".warning-dialog");
-      return;
-    }
     if (state.sheet) {
       state.sheet.generatedAt = new Date();
     }
-    applyAssignments({ randomize: false });
+    applyAssignments({ randomize: true });
   }
 
   if (target.classList.contains("settings-button")) {
@@ -964,10 +989,7 @@ document.body.addEventListener("click", (event) => {
     if (!cell) return;
     const select = cell.querySelector(".preference-select");
     if (!(select instanceof HTMLSelectElement)) return;
-    if (select.value && select.value !== "work") {
-      state.warningMessage = "希望日ではない出勤が含まれています。よろしいですか？";
-      openWarningDialog();
-    }
+    select.value = select.value === "off" ? "" : "off";
   }
 
   if (target.id === "logout") {
@@ -988,12 +1010,6 @@ document.body.addEventListener("click", (event) => {
     closeDialog(".settings-panel");
     closeDialog(".sheet-dialog");
     closeDialog(".warning-dialog");
-    closeDialog(".guide-dialog");
-    closeDialog(".publish-dialog");
-  }
-
-  if (target.dataset.action === "guide-ok") {
-    closeDialog(".guide-dialog");
   }
 });
 
@@ -1011,6 +1027,18 @@ document.body.addEventListener("change", (event) => {
       day.requiredNight = Number(target.value || 0);
     }
   }
+
+  if (target instanceof HTMLSelectElement && target.id === "availability-select") {
+    const panel = target.closest(".settings-panel");
+    if (!panel) return;
+    const weekdayInputs = panel.querySelectorAll('input[name="weekday"]');
+    weekdayInputs.forEach((input) => {
+      input.disabled = target.value !== "specific";
+      if (target.value !== "specific") {
+        input.checked = false;
+      }
+    });
+  }
 });
 
 document.body.addEventListener("submit", (event) => {
@@ -1018,7 +1046,6 @@ document.body.addEventListener("submit", (event) => {
   if (!(form instanceof HTMLFormElement)) return;
   const panel = form.closest(".settings-panel");
   const sheetPanel = form.closest(".sheet-dialog");
-  const guidePanel = form.closest(".guide-dialog");
 
   if (panel instanceof HTMLDialogElement) {
     event.preventDefault();
@@ -1026,6 +1053,8 @@ document.body.addEventListener("submit", (event) => {
     const employmentSelect = panel.querySelector("#employment-select");
     const shiftTypeSelect = panel.querySelector("#shift-type-select");
     const wardSelect = panel.querySelector("#ward-select");
+    const availabilitySelect = panel.querySelector("#availability-select");
+    const weekdayInputs = Array.from(panel.querySelectorAll('input[name="weekday"]'));
     const dayMinInput = panel.querySelector("#day-min");
     const dayMaxInput = panel.querySelector("#day-max");
     const nightMinInput = panel.querySelector("#night-min");
@@ -1034,6 +1063,7 @@ document.body.addEventListener("submit", (event) => {
       employmentSelect instanceof HTMLSelectElement &&
       shiftTypeSelect instanceof HTMLSelectElement &&
       wardSelect instanceof HTMLSelectElement &&
+      availabilitySelect instanceof HTMLSelectElement &&
       dayMinInput instanceof HTMLInputElement &&
       dayMaxInput instanceof HTMLInputElement &&
       nightMinInput instanceof HTMLInputElement &&
@@ -1042,6 +1072,11 @@ document.body.addEventListener("submit", (event) => {
       state.staff[rowIndex].employment = employmentSelect.value;
       state.staff[rowIndex].shiftType = shiftTypeSelect.value;
       state.staff[rowIndex].ward = wardSelect.value;
+      state.staff[rowIndex].availabilityType = availabilitySelect.value;
+      state.staff[rowIndex].availableWeekdays =
+        availabilitySelect.value === "specific"
+          ? weekdayInputs.filter((input) => input.checked).map((input) => input.value)
+          : [];
       state.staff[rowIndex].dayMin = dayMinInput.value;
       state.staff[rowIndex].dayMax = dayMaxInput.value;
       state.staff[rowIndex].nightMin = nightMinInput.value;
@@ -1062,6 +1097,11 @@ document.body.addEventListener("submit", (event) => {
       monthInput instanceof HTMLInputElement &&
       templateSelect instanceof HTMLSelectElement
     ) {
+      if (!templateSelect.value) {
+        state.warningMessage = "勤務者登録が必要です。";
+        openDialog(".warning-dialog");
+        return;
+      }
       const year = Number(yearInput.value || new Date().getFullYear());
       const month = Number(monthInput.value || new Date().getMonth() + 1);
       const sheetId = `${year}-${month}`;
@@ -1071,7 +1111,6 @@ document.body.addEventListener("submit", (event) => {
         year,
         month,
         template: state.selectedTemplate,
-        published: false,
         generatedAt: new Date()
       };
       state.sheets = [newSheet, ...state.sheets.filter((item) => item.id !== sheetId)];
@@ -1079,21 +1118,16 @@ document.body.addEventListener("submit", (event) => {
       state.sheet = {
         year,
         month,
+        template: state.selectedTemplate,
         days: buildDays(year, month),
         warnings: [],
         generatedAt: new Date()
       };
       state.fixedDays.clear();
-      state.published = false;
       state.view = "sheet";
       state.onboarding.sheet = true;
       renderApp();
     }
     sheetPanel.close();
-  }
-
-  if (guidePanel instanceof HTMLDialogElement) {
-    event.preventDefault();
-    guidePanel.close();
   }
 });
