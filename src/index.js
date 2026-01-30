@@ -66,6 +66,13 @@ const state = {
   ownerMode: true,
   templateReady: false,
   sheet: null,
+  sheets: [],
+  currentSheetId: null,
+  published: false,
+  fixedDays: new Set(),
+  onboarding: createOnboardingState(),
+  warningMessage: "入力内容を確認してください。",
+  publishMessage: ""
   published: false,
   fixedDays: new Set(),
   onboarding: createOnboardingState(),
@@ -100,6 +107,13 @@ const formatTimestamp = (date) => {
   return `${year}/${month}/${day} ${hours}:${minutes}`;
 };
 
+const getSheetUrl = (sheet) => {
+  if (!sheet || !state.owner.email) return "";
+  const safeEmail = state.owner.email.replace(/[@.]/g, "_");
+  return `https://shift.local/${safeEmail}/${sheet.year}-${String(sheet.month).padStart(
+    2,
+    "0"
+  )}`;
 const getSheetUrl = () => {
   if (!state.sheet || !state.owner.email) return "";
   const safeEmail = state.owner.email.replace(/[@.]/g, "_");
@@ -158,6 +172,7 @@ const renderLogin = () => `
     <header class="app-header">
       <div>
         <p class="eyebrow">バイトシフト調整</p>
+        <h1>ログイン</h1>
         <h1>ログイン / オーナー登録</h1>
       </div>
     </header>
@@ -290,6 +305,16 @@ const renderTemplate = () => `
       ${renderTodoList()}
     </div>
   </div>
+`;
+
+const renderSheetList = () => `
+  <div class="page">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">シフト表一覧</p>
+        <h1>${state.owner.email} のシフト表一覧</h1>
+      </div>
+      <div class="header-actions">
 `;
 
 const renderSheet = () => {
@@ -639,6 +664,36 @@ const renderTemplate = () => `
         ${renderSteps()}
         <section class="controls">
           <div class="control-group">
+            <button class="primary" id="new-sheet">新規作成</button>
+          </div>
+          <span class="helper-text">新規作成は一覧画面からのみ行えます。</span>
+        </section>
+
+        <section class="sheet-list">
+          ${state.sheets.length === 0
+            ? `<p class="helper-text">まだシフト表がありません。</p>`
+            : state.sheets
+                .map(
+                  (sheet) => `
+                    <div class="sheet-card">
+                      <div>
+                        <h3>${sheet.year}年${sheet.month}月</h3>
+                        <p class="sheet-meta">更新: ${formatTimestamp(sheet.generatedAt)}</p>
+                      </div>
+                      <div class="sheet-actions">
+                        <span class="publish-status ${
+                          sheet.published ? "published" : "draft"
+                        }">
+                          ${sheet.published ? "公開中" : "非公開"}
+                        </span>
+                        <button class="ghost" data-action="open-sheet" data-id="${
+                          sheet.id
+                        }">開く</button>
+                      </div>
+                    </div>
+                  `
+                )
+                .join("")}
             <button class="primary" id="save-template">テンプレートを保存</button>
           </div>
           <div class="control-group">
@@ -742,6 +797,7 @@ const renderSheet = () => {
           <span class="publish-status ${state.published ? "published" : "draft"}">
             ${state.published ? "公開中" : "非公開"}
           </span>
+          <button class="ghost" id="back-to-list">一覧に戻る</button>
           <h1>${state.owner.facility} / ${state.sheet.year}年${state.sheet.month}月 ${generatedAt}</h1>
           <h1>${state.owner.facility} / ${state.sheet.year}年${state.sheet.month}月</h1>
         </div>
@@ -757,6 +813,20 @@ const renderSheet = () => {
 
           <section class="controls">
             <div class="control-group">
+              <button class="ghost" id="publish-sheet" ${
+                state.ownerMode ? "" : "disabled"
+              }>${state.published ? "公開を解除" : "公開する"}</button>
+            </div>
+            ${
+              state.published
+                ? `
+            <div class="control-group">
+              <span class="url-label">URL</span>
+              <span class="url-value">${getSheetUrl(state.sheet)}</span>
+            </div>
+            `
+                : ""
+            }
               <button class="primary" id="new-sheet">新規作成</button>
               <button class="ghost" id="publish-sheet" ${
                 state.ownerMode ? "" : "disabled"
@@ -779,6 +849,8 @@ const renderSheet = () => {
           <section class="controls">
             <div class="control-group">
               <button class="accent" id="auto-shift" ${
+                state.ownerMode && state.published ? "" : "disabled"
+              }>シフトを自動作成</button>
                 state.ownerMode ? "" : "disabled"
               }>シフトを自動作成</button>
               <button class="ghost" id="regenerate" ${
@@ -899,6 +971,24 @@ const renderWarningDialog = () => `
   </dialog>
 `;
 
+const renderPublishDialog = () => `
+  <dialog class="publish-dialog">
+    <form method="dialog" class="settings-content">
+      <header>
+        <h2>公開情報</h2>
+        <button type="button" class="close-button" data-action="close">×</button>
+      </header>
+      <p>${state.publishMessage}</p>
+      ${
+        state.published && state.sheet
+          ? `<div class="url-block">
+              <span class="url-label">URL</span>
+              <span class="url-value">${getSheetUrl(state.sheet)}</span>
+            </div>`
+          : ""
+      }
+      <div class="panel-actions">
+        <button type="submit" class="primary" data-action="close">OK</button>
 `;
 
 const renderSheetDialog = () => `
@@ -1277,6 +1367,8 @@ const renderApp = () => {
     content = renderLogin();
   } else if (state.view === "template") {
     content = renderTemplate();
+  } else if (state.view === "list") {
+    content = renderSheetList();
   } else if (state.view === "sheet") {
     content = renderSheet();
   }
@@ -1286,6 +1378,7 @@ const renderApp = () => {
     ${renderSettingsDialog()}
     ${renderSheetDialog()}
     ${renderWarningDialog()}
+    ${renderPublishDialog()}
     ${renderGuideDialog()}
   `;
 
@@ -1323,6 +1416,13 @@ const resetState = () => {
   state.ownerMode = true;
   state.templateReady = false;
   state.sheet = null;
+  state.sheets = [];
+  state.currentSheetId = null;
+  state.published = false;
+  state.fixedDays = new Set();
+  state.onboarding = createOnboardingState();
+  state.warningMessage = "入力内容を確認してください。";
+  state.publishMessage = "";
   state.published = false;
   state.fixedDays = new Set();
   state.onboarding = createOnboardingState();
@@ -1417,6 +1517,13 @@ const openWarningDialog = () => {
   openDialog(".warning-dialog");
 };
 
+const openPublishDialog = () => {
+  openDialog(".publish-dialog");
+};
+
+const startOwnerSession = () => {
+  state.view = "template";
+  state.ownerMode = true;
 const startOwnerSession = () => {
   state.view = "template";
   state.ownerMode = true;
@@ -1427,6 +1534,21 @@ const startOwnerSession = () => {
 const validateOwnerFields = () => {
   const { email, password } = state.owner;
   return email && password;
+};
+
+const openSheetFromList = (sheetId) => {
+  const sheet = state.sheets.find((item) => item.id === sheetId);
+  if (!sheet) return;
+  state.currentSheetId = sheetId;
+  state.sheet = {
+    year: sheet.year,
+    month: sheet.month,
+    days: buildDays(sheet.year, sheet.month),
+    warnings: [],
+    generatedAt: sheet.generatedAt
+  };
+  state.published = sheet.published;
+  state.view = "sheet";
   const { facility, name, email, password } = state.owner;
   return facility && name && email && password;
 };
@@ -1535,6 +1657,18 @@ document.body.addEventListener("click", (event) => {
   if (target.id === "publish-sheet" && state.ownerMode) {
     state.published = !state.published;
     state.onboarding.published = state.published;
+    const sheetIndex = state.sheets.findIndex(
+      (sheet) => sheet.id === state.currentSheetId
+    );
+    if (sheetIndex !== -1) {
+      state.sheets[sheetIndex].published = state.published;
+      state.sheets[sheetIndex].generatedAt = new Date();
+    }
+    state.publishMessage = state.published
+      ? "公開しました。URLを共有してください。"
+      : "非公開にしました。";
+    renderApp();
+    openPublishDialog();
     syncTodoPopup();
     renderApp();
   }
@@ -1593,11 +1727,22 @@ document.body.addEventListener("click", (event) => {
     resetState();
   }
 
+  if (target.id === "back-to-list") {
+    state.view = "list";
+    renderApp();
+  }
+
+  if (target.dataset.action === "open-sheet") {
+    const sheetId = target.dataset.id;
+    openSheetFromList(sheetId);
+  }
+
   if (target.dataset.action === "close") {
     closeDialog(".settings-panel");
     closeDialog(".sheet-dialog");
     closeDialog(".warning-dialog");
     closeDialog(".guide-dialog");
+    closeDialog(".publish-dialog");
   }
 
   if (target.dataset.action === "guide-ok") {
@@ -1671,6 +1816,16 @@ document.body.addEventListener("submit", (event) => {
     if (yearInput instanceof HTMLInputElement && monthInput instanceof HTMLInputElement) {
       const year = Number(yearInput.value || new Date().getFullYear());
       const month = Number(monthInput.value || new Date().getMonth() + 1);
+      const sheetId = `${year}-${month}`;
+      const newSheet = {
+        id: sheetId,
+        year,
+        month,
+        published: false,
+        generatedAt: new Date()
+      };
+      state.sheets = [newSheet, ...state.sheets.filter((item) => item.id !== sheetId)];
+      state.currentSheetId = sheetId;
       state.sheet = {
         year,
         month,
