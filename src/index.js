@@ -310,6 +310,7 @@ const openShiftVersionWindow = (versionLabel) => {
     availabilityType: person.availabilityType,
     availableWeekdays: person.availableWeekdays
   }));
+  const sheetId = state.currentSheetId;
   const rows = state.staff
     .map((person, rowIndex) => {
       const cells = state.sheet.days
@@ -398,6 +399,36 @@ const openShiftVersionWindow = (versionLabel) => {
           .warning-panel { margin-top: 16px; padding: 12px; border: 1px solid #fca5a5; border-radius: 8px; background: #fef2f2; }
           .warning-panel h2 { margin: 0 0 8px; font-size: 14px; }
           .warning-panel ul { margin: 0; padding-left: 18px; font-size: 13px; }
+          .print-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.45);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+          }
+          .print-modal.is-open { display: flex; }
+          .print-modal-content {
+            background: #fff;
+            border-radius: 12px;
+            padding: 16px;
+            width: min(360px, 90vw);
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.2);
+          }
+          .print-modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 12px;
+          }
+          .print-modal-actions button {
+            border: 1px solid #cbd5f5;
+            background: #fff;
+            border-radius: 8px;
+            padding: 6px 12px;
+            cursor: pointer;
+          }
         </style>
       </head>
       <body>
@@ -408,6 +439,8 @@ const openShiftVersionWindow = (versionLabel) => {
           <div class="legend-item"><span class="legend-swatch legend-shortage"></span>赤: これじゃ人が足りない</div>
         </div>
         <div class="shift-result-actions">
+          <button id="save-shift">保存する</button>
+          <button id="print-shift">印刷する</button>
           <button id="regenerate-shift">作り直す</button>
         </div>
         <table>
@@ -426,6 +459,15 @@ const openShiftVersionWindow = (versionLabel) => {
           <h2>エラー/注意</h2>
           <ul id="warning-list"></ul>
         </section>
+        <div class="print-modal" id="print-modal">
+          <div class="print-modal-content">
+            <p>シフトがまだ完成していません。印刷しますか？</p>
+            <div class="print-modal-actions">
+              <button id="cancel-print">戻る</button>
+              <button id="force-print">それでも印刷</button>
+            </div>
+          </div>
+        </div>
         <script>
           const requiredDay = ${JSON.stringify(requiredDay)};
           const requiredNight = ${JSON.stringify(requiredNight)};
@@ -435,6 +477,8 @@ const openShiftVersionWindow = (versionLabel) => {
           const staffAvailability = ${JSON.stringify(staffAvailability)};
           const fixedDays = new Set(${JSON.stringify(Array.from(fixedSet))});
           const baseFixedDays = new Set(${JSON.stringify(Array.from(baseFixedDays))});
+          const sheetId = ${JSON.stringify(sheetId)};
+          let currentWarnings = [];
 
           const getNumeric = (value) => {
             const number = Number(value);
@@ -550,6 +594,7 @@ const openShiftVersionWindow = (versionLabel) => {
                 ? warnings.map((warning) => \`<li>\${warning}</li>\`).join('')
                 : '<li>現在、エラーはありません。</li>';
             }
+            currentWarnings = warnings;
           };
 
           const applyNightNextDay = (target) => {
@@ -614,6 +659,43 @@ const openShiftVersionWindow = (versionLabel) => {
           document.addEventListener('click', (event) => {
             const target = event.target;
             if (!(target instanceof HTMLButtonElement)) return;
+            if (target.matches('#save-shift')) {
+              const opener = window.opener;
+              if (!opener || typeof opener.saveShiftResult !== 'function') return;
+              const rows = document.querySelectorAll('tbody tr');
+              const assignments = Array.from(rows).map((row) => {
+                const selects = row.querySelectorAll('select[data-action="edit-cell"]');
+                return Array.from(selects).map((select) => select.value);
+              });
+              opener.saveShiftResult({
+                sheetId,
+                assignments,
+                fixedDays: Array.from(fixedDays),
+                requiredDay,
+                requiredNight
+              });
+              return;
+            }
+            if (target.matches('#print-shift')) {
+              const modal = document.getElementById('print-modal');
+              if (currentWarnings.length > 0 && modal) {
+                modal.classList.add('is-open');
+              } else {
+                window.print();
+              }
+              return;
+            }
+            if (target.matches('#cancel-print')) {
+              const modal = document.getElementById('print-modal');
+              if (modal) modal.classList.remove('is-open');
+              return;
+            }
+            if (target.matches('#force-print')) {
+              const modal = document.getElementById('print-modal');
+              if (modal) modal.classList.remove('is-open');
+              window.print();
+              return;
+            }
             if (target.matches('#regenerate-shift')) {
               const opener = window.opener;
               if (!opener) return;
@@ -1166,6 +1248,41 @@ const renderAppPreserveScroll = () => {
   window.scrollTo(windowScrollX, windowScrollY);
 };
 
+window.saveShiftResult = ({ sheetId, assignments, fixedDays, requiredDay, requiredNight }) => {
+  if (!sheetId) return;
+  const sheetIndex = state.sheets.findIndex((item) => item.id === sheetId);
+  if (sheetIndex === -1) return;
+  const sheet = state.sheets[sheetIndex];
+  const updatedSheet = {
+    ...sheet,
+    savedAssignments: assignments,
+    savedFixedDays: fixedDays,
+    savedRequiredDay: requiredDay,
+    savedRequiredNight: requiredNight,
+    generatedAt: new Date()
+  };
+  state.sheets = [
+    ...state.sheets.slice(0, sheetIndex),
+    updatedSheet,
+    ...state.sheets.slice(sheetIndex + 1)
+  ];
+  if (state.currentSheetId === sheetId && state.sheet) {
+    state.assignments = assignments;
+    state.fixedDays = new Set(fixedDays);
+    state.sheet.days.forEach((day, index) => {
+      if (Array.isArray(requiredDay) && requiredDay[index] !== undefined) {
+        day.requiredDay = requiredDay[index];
+      }
+      if (Array.isArray(requiredNight) && requiredNight[index] !== undefined) {
+        day.requiredNight = requiredNight[index];
+      }
+    });
+    state.sheet.generatedAt = updatedSheet.generatedAt;
+  }
+  persistState();
+  renderApp();
+};
+
 const openDialog = (selector) => {
   const dialog = document.querySelector(selector);
   if (dialog instanceof HTMLDialogElement) {
@@ -1383,12 +1500,33 @@ const openSheetFromList = (sheetId) => {
     warnings: [],
     generatedAt: sheet.generatedAt
   };
+  if (Array.isArray(sheet.savedRequiredDay)) {
+    state.sheet.days.forEach((day, index) => {
+      if (sheet.savedRequiredDay[index] !== undefined) {
+        day.requiredDay = sheet.savedRequiredDay[index];
+      }
+    });
+  }
+  if (Array.isArray(sheet.savedRequiredNight)) {
+    state.sheet.days.forEach((day, index) => {
+      if (sheet.savedRequiredNight[index] !== undefined) {
+        day.requiredNight = sheet.savedRequiredNight[index];
+      }
+    });
+  }
   state.shiftPreferences = state.staff.map(() =>
     Array(state.sheet.days.length).fill("")
   );
-  state.assignments = state.staff.map(() =>
-    Array(state.sheet.days.length).fill("")
-  );
+  if (Array.isArray(sheet.savedAssignments)) {
+    state.assignments = sheet.savedAssignments;
+  } else {
+    state.assignments = state.staff.map(() =>
+      Array(state.sheet.days.length).fill("")
+    );
+  }
+  if (Array.isArray(sheet.savedFixedDays)) {
+    state.fixedDays = new Set(sheet.savedFixedDays);
+  }
   state.blockedDays = new Set();
   state.view = "sheet";
   renderApp();
@@ -1658,7 +1796,11 @@ document.body.addEventListener("submit", (event) => {
         year,
         month,
         groupName: state.selectedGroup,
-        generatedAt: new Date()
+        generatedAt: new Date(),
+        savedAssignments: [],
+        savedFixedDays: [],
+        savedRequiredDay: [],
+        savedRequiredNight: []
       };
       state.sheets = [newSheet, ...state.sheets.filter((item) => item.id !== sheetId)];
       persistState();
