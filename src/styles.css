@@ -376,7 +376,7 @@ body {
 }
 
 .group-table {
-  min-width: 0;
+  min-width: 980px;
 }
 
 .group-table th,
@@ -385,7 +385,7 @@ body {
 }
 
 .group-table .corner-cell {
-  min-width: 140px;
+  min-width: 200px;
 }
 
 .shift-table {
@@ -433,6 +433,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  white-space: nowrap;
+}
+
+.name-cell .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .name-cell .name-block {
@@ -525,6 +531,20 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.day-off-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #475569;
+  margin-top: 6px;
+  justify-content: center;
+}
+
+.day-off-toggle input {
+  margin: 0;
 }
 
 .fix-button {

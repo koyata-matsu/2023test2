@@ -126,10 +126,7 @@ const initialStaff = [
 const weekdayLabels = ["日", "月", "火", "水", "木", "金", "土"];
 const preferenceOptions = [
   { value: "", label: "空白" },
-  { value: "work", label: "出勤希望日" },
-  { value: "off", label: "休み希望日" },
-  { value: "am_off", label: "午前休" },
-  { value: "pm_off", label: "午後休" }
+  { value: "off", label: "休み希望日" }
 ];
 
 const templateOptions = [
@@ -484,6 +481,10 @@ const renderSheet = () => {
               ${state.fixedDays.has(day.index) ? "固定" : "固定"}
             </button>
           </div>
+          <label class="day-off-toggle">
+            <input type="checkbox" class="day-off-checkbox" data-col="${day.index}" />
+            □休
+          </label>
         </th>
       `
     )
@@ -769,10 +770,10 @@ const applyAssignments = ({ randomize } = {}) => {
       const select = cell.querySelector(".preference-select");
       if (!select) return;
       const value = select.value;
-      if (value === "work" || value === "pm_off") {
+      if (value !== "off") {
         availableDay.push(cell);
       }
-      if (value === "work" || value === "am_off") {
+      if (value !== "off") {
         availableNight.push(cell);
       }
     });
@@ -995,6 +996,16 @@ document.body.addEventListener("change", (event) => {
     } else {
       day.requiredNight = Number(target.value || 0);
     }
+  }
+
+  if (target instanceof HTMLInputElement && target.classList.contains("day-off-checkbox")) {
+    const col = Number(target.dataset.col);
+    const cells = document.querySelectorAll(`.shift-cell[data-col="${col}"]`);
+    cells.forEach((cell) => {
+      const select = cell.querySelector(".preference-select");
+      if (!(select instanceof HTMLSelectElement)) return;
+      select.value = target.checked ? "off" : "";
+    });
   }
 
   if (target instanceof HTMLSelectElement && target.id === "availability-select") {
