@@ -339,30 +339,25 @@ const renderSheet = () => {
               <button class="primary" id="new-sheet">新規作成</button>
               <button class="ghost" id="publish-sheet" ${
                 state.ownerMode ? "" : "disabled"
-              }>${state.published ? "公開中" : "公開する"}</button>
+              }>${state.published ? "公開を解除" : "公開する"}</button>
             </div>
+            ${
+              state.published
+                ? `
             <div class="control-group">
               <span class="url-label">URL</span>
               <span class="url-value">${getSheetUrl()}</span>
             </div>
-            <div class="control-group">
-              <label class="owner-toggle">
-                <input id="owner-toggle" type="checkbox" ${
-                  state.ownerMode ? "checked" : ""
-                } />
-                オーナーとして編集する
-              </label>
-            </div>
+            `
+                : ""
+            }
           </section>
 
           <section class="controls">
             <div class="control-group">
               <button class="accent" id="auto-shift" ${
-                state.ownerMode ? "" : "disabled"
+                state.ownerMode && state.published ? "" : "disabled"
               }>シフトを自動作成</button>
-              <button class="ghost" id="regenerate" ${
-                state.ownerMode ? "" : "disabled"
-              }>作り変える</button>
             </div>
             <div class="control-group">
               <span class="helper-text">固定した日付は変更されません。</span>
@@ -688,17 +683,15 @@ document.body.addEventListener("click", (event) => {
   }
 
   if (target.id === "auto-shift" && state.ownerMode) {
+    if (!state.published) {
+      state.warningMessage = "公開後にシフトを自動作成できます。";
+      openDialog(".warning-dialog");
+      return;
+    }
     if (state.sheet) {
       state.sheet.generatedAt = new Date();
     }
     applyAssignments({ randomize: false });
-  }
-
-  if (target.id === "regenerate" && state.ownerMode) {
-    if (state.sheet) {
-      state.sheet.generatedAt = new Date();
-    }
-    applyAssignments({ randomize: true });
   }
 
   if (target.classList.contains("settings-button")) {
@@ -734,10 +727,6 @@ document.body.addEventListener("click", (event) => {
 
 document.body.addEventListener("change", (event) => {
   const target = event.target;
-  if (target instanceof HTMLInputElement && target.id === "owner-toggle") {
-    state.ownerMode = target.checked;
-    renderApp();
-  }
 
   if (target instanceof HTMLInputElement && target.classList.contains("required-input")) {
     const col = Number(target.dataset.col);
