@@ -1,16 +1,16 @@
 import "./styles.css";
 
 const staff = [
-  "佐藤",
-  "鈴木",
-  "高橋",
-  "田中",
-  "伊藤",
-  "渡辺",
-  "山本",
-  "中村",
-  "小林",
-  "加藤"
+  { name: "佐藤", role: "社員", limit: "週3まで", ward: "病棟Aのみ" },
+  { name: "鈴木", role: "パート", limit: "", ward: "病棟B・Cのみ" },
+  { name: "高橋", role: "夜専", limit: "週3まで", ward: "" },
+  { name: "田中", role: "日専", limit: "", ward: "病棟Aのみ" },
+  { name: "伊藤", role: "社員", limit: "", ward: "" },
+  { name: "渡辺", role: "パート", limit: "", ward: "" },
+  { name: "山本", role: "夜専", limit: "週3まで", ward: "病棟B・Cのみ" },
+  { name: "中村", role: "日専", limit: "", ward: "" },
+  { name: "小林", role: "社員", limit: "週3まで", ward: "" },
+  { name: "加藤", role: "パート", limit: "", ward: "" }
 ];
 
 const weekdayLabels = ["日", "月", "火", "水", "木", "金", "土"];
@@ -49,6 +49,8 @@ const createPreferenceSelect = (rowIndex, colIndex) => {
   `;
 };
 
+let ownerMode = false;
+
 const renderTable = (year, month, days) => {
   const headerCells = days
     .map(
@@ -76,9 +78,19 @@ const renderTable = (year, month, days) => {
 
   const rows = staff
     .map(
-      (name, rowIndex) => `
+      (person, rowIndex) => `
         <tr data-row="${rowIndex}">
-          <th class="name-cell">${name}</th>
+          <th class="name-cell">
+            <div class="name-block">
+              <div class="name">${person.name}</div>
+              <div class="tags">
+                ${person.role ? `<span class="tag">${person.role}</span>` : ""}
+                ${person.limit ? `<span class="tag">${person.limit}</span>` : ""}
+                ${person.ward ? `<span class="tag">${person.ward}</span>` : ""}
+              </div>
+            </div>
+            <button class="settings-button" data-row="${rowIndex}">設定</button>
+          </th>
           ${days
             .map(
               (_, colIndex) => `
@@ -122,6 +134,14 @@ const renderTable = (year, month, days) => {
           <button class="accent" id="create-shift">シフトを作成</button>
           <span class="helper-text">最低必要人数と希望を元に自動で割り当て</span>
         </div>
+        <div class="control-group">
+          <label class="owner-toggle">
+            <input id="owner-toggle" type="checkbox" ${
+              ownerMode ? "checked" : ""
+            } />
+            オーナーとして編集する
+          </label>
+        </div>
       </section>
 
       <section class="sheet">
@@ -141,6 +161,44 @@ const renderTable = (year, month, days) => {
           </tbody>
         </table>
       </section>
+
+      <dialog class="settings-panel">
+        <form method="dialog" class="settings-content">
+          <header>
+            <h2><span class="settings-name"></span> の設定</h2>
+            <button type="button" class="close-button" data-action="close">×</button>
+          </header>
+          <label>
+            区分
+            <select id="role-select">
+              <option value="">未設定</option>
+              <option value="社員">社員</option>
+              <option value="パート">パート</option>
+              <option value="夜専">夜専</option>
+              <option value="日専">日専</option>
+            </select>
+          </label>
+          <label>
+            稼働上限
+            <select id="limit-select">
+              <option value="">指定なし</option>
+              <option value="週3まで">週3まで</option>
+            </select>
+          </label>
+          <label>
+            病棟条件
+            <select id="ward-select">
+              <option value="">指定なし</option>
+              <option value="病棟Aのみ">病棟Aのみ</option>
+              <option value="病棟B・Cのみ">病棟B・Cのみ</option>
+            </select>
+          </label>
+          <div class="panel-actions">
+            <button type="button" class="ghost" data-action="close">キャンセル</button>
+            <button type="submit" class="primary" data-action="save">保存</button>
+          </div>
+        </form>
+      </dialog>
     </div>
   `;
 };
@@ -200,12 +258,39 @@ const applyAssignments = (days) => {
   });
 };
 
+const setOwnerMode = (enabled) => {
+  ownerMode = enabled;
+  document.body.dataset.owner = enabled ? "true" : "false";
+};
+
+const openSettingsPanel = (rowIndex) => {
+  if (document.body.dataset.owner !== "true") return;
+  const person = staff[rowIndex];
+  if (!person) return;
+  const panel = document.querySelector(".settings-panel");
+  if (!(panel instanceof HTMLDialogElement)) return;
+  panel.querySelector(".settings-name").textContent = person.name;
+  panel.querySelector("#role-select").value = person.role;
+  panel.querySelector("#limit-select").value = person.limit;
+  panel.querySelector("#ward-select").value = person.ward;
+  panel.dataset.row = String(rowIndex);
+  panel.showModal();
+};
+
+const closeSettingsPanel = () => {
+  const panel = document.querySelector(".settings-panel");
+  if (panel instanceof HTMLDialogElement) {
+    panel.close();
+  }
+};
+
 const initialDate = new Date();
 let currentYear = initialDate.getFullYear();
 let currentMonth = initialDate.getMonth() + 1;
 let currentDays = buildDays(currentYear, currentMonth);
 
 renderTable(currentYear, currentMonth, currentDays);
+setOwnerMode(false);
 
 app.addEventListener("click", (event) => {
   const target = event.target;
@@ -221,9 +306,51 @@ app.addEventListener("click", (event) => {
     currentMonth = nextMonth;
     currentDays = buildDays(currentYear, currentMonth);
     renderTable(currentYear, currentMonth, currentDays);
+    setOwnerMode(ownerMode);
   }
 
   if (target.id === "create-shift") {
     applyAssignments(currentDays);
   }
+
+  if (target.classList.contains("settings-button")) {
+    const rowIndex = Number(target.dataset.row);
+    openSettingsPanel(rowIndex);
+  }
+
+  if (target.dataset.action === "close") {
+    closeSettingsPanel();
+  }
+});
+
+app.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  if (target.id === "owner-toggle") {
+    setOwnerMode(target.checked);
+  }
+});
+
+app.addEventListener("submit", (event) => {
+  const form = event.target;
+  if (!(form instanceof HTMLFormElement)) return;
+  const panel = form.closest(".settings-panel");
+  if (!(panel instanceof HTMLDialogElement)) return;
+  event.preventDefault();
+  const rowIndex = Number(panel.dataset.row);
+  const roleSelect = panel.querySelector("#role-select");
+  const limitSelect = panel.querySelector("#limit-select");
+  const wardSelect = panel.querySelector("#ward-select");
+  if (
+    roleSelect instanceof HTMLSelectElement &&
+    limitSelect instanceof HTMLSelectElement &&
+    wardSelect instanceof HTMLSelectElement
+  ) {
+    staff[rowIndex].role = roleSelect.value;
+    staff[rowIndex].limit = limitSelect.value;
+    staff[rowIndex].ward = wardSelect.value;
+    renderTable(currentYear, currentMonth, currentDays);
+    setOwnerMode(true);
+  }
+  closeSettingsPanel();
 });

@@ -14,9 +14,8 @@ body {
 }
 
 .page {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 32px 24px 48px;
+  width: 100%;
+  padding: 24px 16px 48px;
 }
 
 .app-header {
@@ -105,6 +104,11 @@ body {
   color: #6b7280;
 }
 
+.owner-toggle {
+  font-weight: 600;
+  color: #1f2937;
+}
+
 .sheet {
   background: #ffffff;
   border-radius: 16px;
@@ -116,7 +120,7 @@ body {
 .shift-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 960px;
+  min-width: 1200px;
 }
 
 .shift-table th,
@@ -135,7 +139,7 @@ body {
 }
 
 .corner-cell {
-  min-width: 120px;
+  min-width: 180px;
   position: sticky;
   left: 0;
   background: #f1f5f9;
@@ -152,10 +156,131 @@ body {
   left: 0;
   background: #ffffff;
   font-weight: 600;
-  min-width: 120px;
-  text-align: left;
-  padding-left: 16px;
+  min-width: 180px;
+  padding: 8px 12px;
   z-index: 1;
+}
+
+.name-cell .name-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.name-cell .name {
+  font-size: 15px;
+}
+
+.name-cell .tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tag {
+  background: #e2e8f0;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: #334155;
+}
+
+.settings-button {
+  margin-top: 6px;
+  width: 100%;
+  border: 1px solid #cbd5f5;
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #ffffff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+body[data-owner="false"] .settings-button {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.settings-panel {
+  border: none;
+  border-radius: 16px;
+  padding: 0;
+  width: min(420px, 92vw);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+}
+
+.settings-panel::backdrop {
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+}
+
+.settings-content header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-content h2 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.settings-content label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.settings-content select {
+  border: 1px solid #cbd5f5;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+  background: #ffffff;
+}
+
+.panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.close-button,
+.panel-actions button {
+  border: none;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.panel-actions .ghost {
+  background: #e2e8f0;
+  color: #1f2937;
+}
+
+.panel-actions .primary {
+  background: #4f46e5;
+  color: #ffffff;
+}
+
+.close-button {
+  background: #e2e8f0;
+  color: #1f2937;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  line-height: 1;
 }
 
 .day-cell {
@@ -242,5 +367,9 @@ body {
   .controls {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .shift-table {
+    min-width: 960px;
   }
 }
