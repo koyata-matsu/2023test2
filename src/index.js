@@ -533,9 +533,18 @@ const openShiftVersionWindow = (versionLabel) => {
             const colIndex = Number(cell.dataset.col);
             const nextCell = row.querySelector(\`td[data-col="\${colIndex + 1}"] select[data-action="edit-cell"]\`);
             if (!nextCell || nextCell.disabled) return;
-            if (nextCell.value !== "※") {
-              nextCell.value = "※";
-            }
+            nextCell.value = "※";
+          };
+
+          const enforceNightRests = () => {
+            const rows = document.querySelectorAll('tbody tr');
+            rows.forEach((row) => {
+              const cells = row.querySelectorAll('td[data-col] select[data-action="edit-cell"]');
+              cells.forEach((select) => {
+                if (select.value !== "●") return;
+                applyNightNextDay(select);
+              });
+            });
           };
 
           document.addEventListener('change', (event) => {
@@ -564,6 +573,7 @@ const openShiftVersionWindow = (versionLabel) => {
           requiredDay.forEach((_, index) => {
             updateFixedButtonState(index);
           });
+          enforceNightRests();
           updateWarnings();
         </script>
       </body>
