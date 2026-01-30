@@ -31,6 +31,12 @@ body {
   margin-bottom: 24px;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .app-header h1 {
   margin: 4px 0 0;
   font-size: 28px;
@@ -62,6 +68,12 @@ body {
   gap: 16px;
 }
 
+.button-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .card label,
 .settings-content label {
   display: flex;
@@ -88,6 +100,41 @@ body {
   flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 20px;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  font-size: 12px;
+}
+
+.step-indicator {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 2px solid #cbd5f5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #4f46e5;
+}
+
+.step.done {
+  border-color: #bfdbfe;
+  background: #eff6ff;
 }
 
 .control-group {

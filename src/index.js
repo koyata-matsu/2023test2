@@ -22,7 +22,23 @@ const preferenceOptions = [
   { value: "pm_off", label: "午後休" }
 ];
 
+const steps = [
+  { key: "template", label: "1.テンプレートを作成する" },
+  { key: "sheet", label: "2.年月を選びシートを作成" },
+  { key: "settings", label: "3.設定を調整する" },
+  { key: "published", label: "4.公開する" },
+  { key: "shifted", label: "5.シフト作成をする" }
+];
+
 const app = document.getElementById("app");
+
+const createOnboardingState = () => ({
+  template: false,
+  sheet: false,
+  settings: false,
+  published: false,
+  shifted: false
+});
 
 const state = {
   view: "login",
@@ -32,6 +48,8 @@ const state = {
   templateReady: false,
   sheet: null,
   published: false,
+  fixedDays: new Set(),
+  onboarding: createOnboardingState()
   fixedDays: new Set()
 };
 
@@ -50,11 +68,26 @@ const buildDays = (year, month) => {
 };
 
 const getSheetUrl = () => {
+  if (!state.sheet || !state.ownerName) return "";
   if (!state.sheet) return "";
   return `https://shift.local/${state.ownerName}/${state.sheet.year}-${String(
     state.sheet.month
   ).padStart(2, "0")}`;
 };
+
+const renderSteps = () => `
+  <section class="steps">
+    ${steps
+      .map((step) => {
+        const done = state.onboarding[step.key];
+        return `<div class="step ${done ? "done" : ""}">
+          <span class="step-indicator">${done ? "✓" : ""}</span>
+          <span class="step-label">${step.label}</span>
+        </div>`;
+      })
+      .join("")}
+  </section>
+`;
 
 const renderLogin = () => `
   <div class="page login">
@@ -71,6 +104,11 @@ const renderLogin = () => `
           state.ownerName
         }" />
       </label>
+      <div class="button-row">
+        <button class="primary" id="create-owner">アカウントを作成</button>
+        <button class="ghost" id="login-owner">ログイン</button>
+      </div>
+      <p class="helper-text">初回ログインはテンプレート作成からスタートします。</p>
       <button class="primary" id="create-owner">アカウントを作成</button>
       <p class="helper-text">オーナーはテンプレートを作成してからシフト表を作成します。</p>
     </section>
@@ -135,6 +173,14 @@ const renderTemplate = () => `
         <p class="eyebrow">テンプレート作成</p>
         <h1>${state.ownerName} のシフトテンプレート</h1>
       </div>
+      <div class="header-actions">
+        <div class="header-note">スタッフ情報を登録してテンプレート化</div>
+        <button class="ghost" id="logout">ログアウト</button>
+      </div>
+    </header>
+
+    ${renderSteps()}
+
       <div class="header-note">スタッフ情報を登録してテンプレート化</div>
     </header>
 
@@ -232,6 +278,20 @@ const renderSheet = () => {
           <p class="eyebrow">公開前シート</p>
           <h1>${state.ownerName} / ${state.sheet.year}年${state.sheet.month}月</h1>
         </div>
+        <div class="header-actions">
+          <div class="header-note">URLを公開すると希望入力が可能</div>
+          <button class="ghost" id="logout">ログアウト</button>
+        </div>
+      </header>
+
+      ${renderSteps()}
+
+      <section class="controls">
+        <div class="control-group">
+          <button class="primary" id="new-sheet">新規作成</button>
+          <button class="ghost" id="publish-sheet" ${
+            state.ownerMode ? "" : "disabled"
+          }>${state.published ? "公開中" : "公開する"}</button>
         <div class="header-note">URLを公開すると希望入力が可能</div>
       </header>
 
@@ -258,6 +318,12 @@ const renderSheet = () => {
 
       <section class="controls">
         <div class="control-group">
+          <button class="accent" id="auto-shift" ${
+            state.ownerMode ? "" : "disabled"
+          }>シフトを自動作成</button>
+          <button class="ghost" id="regenerate" ${
+            state.ownerMode ? "" : "disabled"
+          }>作り変える</button>
           <button class="accent" id="auto-shift">シフトを自動作成</button>
           <button class="ghost" id="regenerate">作り変える</button>
         </div>
@@ -402,6 +468,19 @@ const closeDialog = (selector) => {
   }
 };
 
+const resetState = () => {
+  state.view = "login";
+  state.ownerName = "";
+  state.staff = structuredClone(initialStaff);
+  state.ownerMode = true;
+  state.templateReady = false;
+  state.sheet = null;
+  state.published = false;
+  state.fixedDays = new Set();
+  state.onboarding = createOnboardingState();
+  renderApp();
+};
+
 const applyAssignments = ({ randomize } = {}) => {
   if (!state.sheet) return;
   const warnings = [];
@@ -457,6 +536,7 @@ const applyAssignments = ({ randomize } = {}) => {
   });
 
   state.sheet.warnings = warnings;
+  state.onboarding.shifted = true;
   renderApp();
 };
 
@@ -479,12 +559,27 @@ const openWarningDialog = () => {
   openDialog(".warning-dialog");
 };
 
+const startOwnerSession = (name) => {
+  state.ownerName = name;
+  state.view = "template";
+  state.ownerMode = true;
+  renderApp();
+};
+
 renderApp();
 
 document.body.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
 
+  if (target.id === "create-owner" || target.id === "login-owner") {
+    const input = document.getElementById("owner-name");
+    if (input instanceof HTMLInputElement && input.value.trim()) {
+      if (target.id === "create-owner") {
+        state.onboarding = createOnboardingState();
+        state.templateReady = false;
+      }
+      startOwnerSession(input.value.trim());
   if (target.id === "create-owner") {
     const input = document.getElementById("owner-name");
     if (input instanceof HTMLInputElement && input.value.trim()) {
@@ -496,10 +591,20 @@ document.body.addEventListener("click", (event) => {
 
   if (target.id === "save-template") {
     state.templateReady = true;
+    state.onboarding.template = true;
     renderApp();
   }
 
   if (target.id === "go-sheet") {
+    const now = new Date();
+    state.view = "sheet";
+    state.sheet = {
+      year: now.getFullYear(),
+      month: now.getMonth() + 1,
+      days: buildDays(now.getFullYear(), now.getMonth() + 1),
+      warnings: []
+    };
+    state.onboarding.sheet = true;
     state.view = "sheet";
     state.sheet = {
       year: new Date().getFullYear(),
@@ -514,6 +619,17 @@ document.body.addEventListener("click", (event) => {
     openDialog(".sheet-dialog");
   }
 
+  if (target.id === "publish-sheet" && state.ownerMode) {
+    state.published = !state.published;
+    state.onboarding.published = state.published;
+    renderApp();
+  }
+
+  if (target.id === "auto-shift" && state.ownerMode) {
+    applyAssignments({ randomize: false });
+  }
+
+  if (target.id === "regenerate" && state.ownerMode) {
   if (target.id === "publish-sheet") {
     state.published = !state.published;
     renderApp();
@@ -540,6 +656,10 @@ document.body.addEventListener("click", (event) => {
       state.fixedDays.add(index);
     }
     renderApp();
+  }
+
+  if (target.id === "logout") {
+    resetState();
   }
 
   if (target.dataset.action === "close") {
@@ -599,6 +719,7 @@ document.body.addEventListener("submit", (event) => {
       state.staff[rowIndex].role = roleSelect.value;
       state.staff[rowIndex].limit = limitSelect.value;
       state.staff[rowIndex].ward = wardSelect.value;
+      state.onboarding.settings = true;
       renderApp();
     }
     panel.close();
@@ -619,6 +740,7 @@ document.body.addEventListener("submit", (event) => {
       };
       state.fixedDays.clear();
       state.published = false;
+      state.onboarding.sheet = true;
       renderApp();
     }
     sheetPanel.close();
