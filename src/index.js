@@ -154,11 +154,6 @@ const createEmptyStaff = () => ({
   nightMax: ""
 });
 
-const initialGroups = templateOptions.map((option) => ({
-  name: option.value,
-  staff: structuredClone(initialStaff)
-}));
-
 const state = {
   view: "login",
   owner: {
@@ -169,12 +164,12 @@ const state = {
   ownerMode: true,
   sheet: null,
   sheets: [],
-  groups: structuredClone(initialGroups),
-  groupDraftName: templateOptions[0].value,
+  groups: [],
+  groupDraftName: "",
   currentSheetId: null,
   fixedDays: new Set(),
   warningMessage: "入力内容を確認してください。",
-  selectedGroup: templateOptions[0].value
+  selectedGroup: ""
 };
 
 const buildDays = (year, month) => {
@@ -374,7 +369,7 @@ const renderGroupCreation = () => `
         </section>
 
         <section class="sheet">
-          <table class="shift-table" aria-label="勤務者登録一覧">
+          <table class="shift-table group-table" aria-label="勤務者登録一覧">
             <thead>
               <tr>
                 <th class="corner-cell">氏名</th>
@@ -740,12 +735,12 @@ const resetState = () => {
   state.ownerMode = true;
   state.sheet = null;
   state.sheets = [];
-  state.groups = structuredClone(initialGroups);
-  state.groupDraftName = templateOptions[0].value;
+  state.groups = [];
+  state.groupDraftName = "";
   state.currentSheetId = null;
   state.fixedDays = new Set();
   state.warningMessage = "入力内容を確認してください。";
-  state.selectedGroup = templateOptions[0].value;
+  state.selectedGroup = "";
   renderApp();
 };
 

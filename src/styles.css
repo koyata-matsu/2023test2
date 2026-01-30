@@ -375,6 +375,19 @@ body {
   overflow-x: auto;
 }
 
+.group-table {
+  min-width: 0;
+}
+
+.group-table th,
+.group-table td {
+  white-space: nowrap;
+}
+
+.group-table .corner-cell {
+  min-width: 140px;
+}
+
 .shift-table {
   width: 100%;
   border-collapse: collapse;
