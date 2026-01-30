@@ -84,6 +84,19 @@ const buildDays = (year, month) => {
   });
 };
 
+const formatTimestamp = (date) => {
+  if (!(date instanceof Date)) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}/${month}/${day} ${hours}:${minutes}`;
+};
+
+const getSheetUrl = () => {
+  if (!state.sheet || !state.owner.name) return "";
+  return `https://shift.local/${state.owner.name}/${state.sheet.year}-${String(
 const getSheetUrl = () => {
   if (!state.sheet || !state.owner.name) return "";
   return `https://shift.local/${state.owner.name}/${state.sheet.year}-${String(
@@ -301,6 +314,9 @@ const renderTemplate = () => `
 
 const renderSheet = () => {
   if (!state.sheet) return "";
+  const generatedAt = state.sheet.generatedAt
+    ? `（更新: ${formatTimestamp(state.sheet.generatedAt)}）`
+    : "";
   const headerCells = state.sheet.days
     .map(
       (day) => `
@@ -343,6 +359,7 @@ const renderSheet = () => {
       <header class="app-header">
         <div>
           <p class="eyebrow">公開前シート</p>
+          <h1>${state.owner.facility} / ${state.sheet.year}年${state.sheet.month}月 ${generatedAt}</h1>
           <h1>${state.owner.facility} / ${state.sheet.year}年${state.sheet.month}月</h1>
         </div>
         <div class="header-actions">
@@ -452,6 +469,35 @@ const renderSettingsDialog = () => `
       </div>
     </form>
   </dialog>
+`;
+
+const renderSheetDialog = () => `
+  <dialog class="sheet-dialog">
+    <form method="dialog" class="settings-content">
+      <header>
+        <h2>新規シート作成</h2>
+        <button type="button" class="close-button" data-action="close">×</button>
+      </header>
+      <label>
+        年
+        <input id="sheet-year" type="number" min="2023" value="${
+          state.sheet?.year || new Date().getFullYear()
+        }" />
+      </label>
+      <label>
+        月
+        <input id="sheet-month" type="number" min="1" max="12" value="${
+          state.sheet?.month || new Date().getMonth() + 1
+        }" />
+      </label>
+      <div class="panel-actions">
+        <button type="button" class="ghost" data-action="close">キャンセル</button>
+        <button type="submit" class="primary" data-action="create">作成</button>
+      </div>
+    </form>
+  </dialog>
+`;
+
 `;
 
 const renderSheetDialog = () => `
@@ -765,6 +811,7 @@ const renderWarningDialog = () => `
         <h2>注意</h2>
         <button type="button" class="close-button" data-action="close">×</button>
       </header>
+      <p class="warning-text">${state.warningMessage}</p>
       <p class="warning-text">希望日でない出勤が含まれています。よろしいですか？</p>
       <div class="panel-actions">
         <button type="button" class="ghost" data-action="close">戻る</button>
@@ -773,6 +820,26 @@ const renderWarningDialog = () => `
     </form>
   </dialog>
 `;
+
+const renderGuideDialog = () => {
+  const stepKey = getNextStepKey();
+  if (!stepKey) return "";
+  const text = stepHints[stepKey];
+  return `
+    <dialog class="guide-dialog" data-step="${stepKey}">
+      <form method="dialog" class="settings-content">
+        <header>
+          <h2>次にやること</h2>
+          <button type="button" class="close-button" data-action="close">×</button>
+        </header>
+        <p>${text}</p>
+        <div class="panel-actions">
+          <button type="submit" class="primary" data-action="guide-ok">OK</button>
+        </div>
+      </form>
+    </dialog>
+  `;
+};
 
 const renderApp = () => {
   let content = "";
@@ -997,6 +1064,11 @@ document.body.addEventListener("click", (event) => {
       year: now.getFullYear(),
       month: now.getMonth() + 1,
       days: buildDays(now.getFullYear(), now.getMonth() + 1),
+      warnings: [],
+      generatedAt: new Date()
+    };
+    state.onboarding.sheet = true;
+    syncTodoPopup();
       warnings: []
     };
     state.onboarding.sheet = true;
@@ -1023,10 +1095,16 @@ document.body.addEventListener("click", (event) => {
   }
 
   if (target.id === "auto-shift" && state.ownerMode) {
+    if (state.sheet) {
+      state.sheet.generatedAt = new Date();
+    }
     applyAssignments({ randomize: false });
   }
 
   if (target.id === "regenerate" && state.ownerMode) {
+    if (state.sheet) {
+      state.sheet.generatedAt = new Date();
+    }
   if (target.id === "publish-sheet") {
     state.published = !state.published;
     renderApp();
@@ -1141,6 +1219,8 @@ document.body.addEventListener("submit", (event) => {
         year,
         month,
         days: buildDays(year, month),
+        warnings: [],
+        generatedAt: new Date()
         warnings: []
       };
       state.fixedDays.clear();
