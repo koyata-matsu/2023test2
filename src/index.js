@@ -31,6 +31,8 @@ const steps = [
 ];
 
 const stepHints = {
+  template: "テンプレートを保存して新規シフト表を作成します。",
+  sheet: "年月を選んで新規シフト表を作成してください。",
   template: "スタッフ設定を確認し、テンプレートを保存しましょう。",
   sheet: "右上の新規作成から年月を選択してください。",
   settings: "名前横の設定ボタンでスタッフ条件を調整します。",
@@ -51,6 +53,9 @@ const createOnboardingState = () => ({
 const state = {
   view: "login",
   owner: {
+    email: "",
+    password: ""
+  },
     facility: "",
     name: "",
     email: "",
@@ -95,6 +100,9 @@ const formatTimestamp = (date) => {
 };
 
 const getSheetUrl = () => {
+  if (!state.sheet || !state.owner.email) return "";
+  const safeEmail = state.owner.email.replace(/[@.]/g, "_");
+  return `https://shift.local/${safeEmail}/${state.sheet.year}-${String(
   if (!state.sheet || !state.owner.name) return "";
   return `https://shift.local/${state.owner.name}/${state.sheet.year}-${String(
 const getSheetUrl = () => {
@@ -177,6 +185,11 @@ const renderLogin = () => `
         パスワード
         <input id="owner-password" type="password" placeholder="8文字以上" value="${
           state.owner.password
+        }" />
+      </label>
+      <div class="button-row">
+        <button class="primary" id="login-owner">ログイン</button>
+      </div>
         オーナー名
         <input id="owner-name" type="text" placeholder="例: 山田オーナー" value="${
           state.ownerName
@@ -249,6 +262,9 @@ const renderTemplate = () => `
     <header class="app-header">
       <div>
         <p class="eyebrow">テンプレート作成</p>
+        <h1>${state.owner.email}</h1>
+      </div>
+      <div class="header-actions">
         <h1>${state.owner.facility} / ${state.owner.name}</h1>
         <h1>${state.ownerName} のシフトテンプレート</h1>
       </div>
@@ -359,6 +375,13 @@ const renderSheet = () => {
       <header class="app-header">
         <div>
           <p class="eyebrow">公開前シート</p>
+          <h1>${state.sheet.year}年${state.sheet.month}月 ${generatedAt}</h1>
+        </div>
+        <div class="header-actions">
+          <div class="header-note">URLを公開すると希望入力が可能</div>
+          <span class="publish-status ${state.published ? "published" : "draft"}">
+            ${state.published ? "公開中" : "非公開"}
+          </span>
           <h1>${state.owner.facility} / ${state.sheet.year}年${state.sheet.month}月 ${generatedAt}</h1>
           <h1>${state.owner.facility} / ${state.sheet.year}年${state.sheet.month}月</h1>
         </div>
@@ -469,6 +492,53 @@ const renderSettingsDialog = () => `
       </div>
     </form>
   </dialog>
+`;
+
+const renderSheetDialog = () => `
+  <dialog class="sheet-dialog">
+    <form method="dialog" class="settings-content">
+      <header>
+        <h2>新規シフト表を作成</h2>
+        <button type="button" class="close-button" data-action="close">×</button>
+      </header>
+      <label>
+        年
+        <input id="sheet-year" type="number" min="2023" value="${
+          state.sheet?.year || new Date().getFullYear()
+        }" />
+      </label>
+      <label>
+        月
+        <input id="sheet-month" type="number" min="1" max="12" value="${
+          state.sheet?.month || new Date().getMonth() + 1
+        }" />
+      </label>
+      <div class="panel-actions">
+        <button type="button" class="ghost" data-action="close">キャンセル</button>
+        <button type="submit" class="primary" data-action="create">
+          〇〇年◯月の新規シフト表を作成
+        </button>
+      </div>
+    </form>
+  </dialog>
+`;
+
+const renderWarningDialog = () => `
+  <dialog class="warning-dialog">
+    <form method="dialog" class="settings-content">
+      <header>
+        <h2>注意</h2>
+        <button type="button" class="close-button" data-action="close">×</button>
+      </header>
+      <p class="warning-text">${state.warningMessage}</p>
+      <div class="panel-actions">
+        <button type="button" class="ghost" data-action="close">戻る</button>
+        <button type="submit" class="primary" data-action="confirm">OK</button>
+      </div>
+    </form>
+  </dialog>
+`;
+
 `;
 
 const renderSheetDialog = () => `
@@ -886,6 +956,7 @@ const closeDialog = (selector) => {
 
 const resetState = () => {
   state.view = "login";
+  state.owner = { email: "", password: "" };
   state.owner = { facility: "", name: "", email: "", password: "" };
   state.ownerName = "";
   state.staff = structuredClone(initialStaff);
@@ -994,6 +1065,8 @@ const startOwnerSession = () => {
 };
 
 const validateOwnerFields = () => {
+  const { email, password } = state.owner;
+  return email && password;
   const { facility, name, email, password } = state.owner;
   return facility && name && email && password;
 };
@@ -1011,6 +1084,10 @@ document.body.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
 
+  if (target.id === "login-owner") {
+    const emailInput = document.getElementById("owner-email");
+    const passwordInput = document.getElementById("owner-password");
+    if (
   if (target.id === "create-owner" || target.id === "login-owner") {
     const facilityInput = document.getElementById("facility-name");
     const nameInput = document.getElementById("owner-name");
@@ -1029,6 +1106,13 @@ document.body.addEventListener("click", (event) => {
         password: passwordInput.value.trim()
       };
       if (!validateOwnerFields()) {
+        state.warningMessage = "メールアドレスとパスワードを入力してください。";
+        openDialog(".warning-dialog");
+        return;
+      }
+      state.onboarding = createOnboardingState();
+      state.templateReady = false;
+      startOwnerSession();
         state.warningMessage = "施設名・名前・メールアドレス・パスワードを入力してください。";
         openDialog(".warning-dialog");
         return;
@@ -1055,6 +1139,7 @@ document.body.addEventListener("click", (event) => {
     state.onboarding.template = true;
     syncTodoPopup();
     renderApp();
+    openDialog(".sheet-dialog");
   }
 
   if (target.id === "go-sheet") {
@@ -1221,6 +1306,10 @@ document.body.addEventListener("submit", (event) => {
         days: buildDays(year, month),
         warnings: [],
         generatedAt: new Date()
+      };
+      state.fixedDays.clear();
+      state.published = false;
+      state.view = "sheet";
         warnings: []
       };
       state.fixedDays.clear();
