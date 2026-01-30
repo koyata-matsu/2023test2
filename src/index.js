@@ -50,6 +50,7 @@ const state = {
   published: false,
   fixedDays: new Set(),
   onboarding: createOnboardingState()
+  fixedDays: new Set()
 };
 
 const buildDays = (year, month) => {
@@ -68,6 +69,7 @@ const buildDays = (year, month) => {
 
 const getSheetUrl = () => {
   if (!state.sheet || !state.ownerName) return "";
+  if (!state.sheet) return "";
   return `https://shift.local/${state.ownerName}/${state.sheet.year}-${String(
     state.sheet.month
   ).padStart(2, "0")}`;
@@ -107,6 +109,8 @@ const renderLogin = () => `
         <button class="ghost" id="login-owner">ログイン</button>
       </div>
       <p class="helper-text">初回ログインはテンプレート作成からスタートします。</p>
+      <button class="primary" id="create-owner">アカウントを作成</button>
+      <p class="helper-text">オーナーはテンプレートを作成してからシフト表を作成します。</p>
     </section>
   </div>
 `;
@@ -176,6 +180,9 @@ const renderTemplate = () => `
     </header>
 
     ${renderSteps()}
+
+      <div class="header-note">スタッフ情報を登録してテンプレート化</div>
+    </header>
 
     <section class="controls">
       <div class="control-group">
@@ -285,6 +292,15 @@ const renderSheet = () => {
           <button class="ghost" id="publish-sheet" ${
             state.ownerMode ? "" : "disabled"
           }>${state.published ? "公開中" : "公開する"}</button>
+        <div class="header-note">URLを公開すると希望入力が可能</div>
+      </header>
+
+      <section class="controls">
+        <div class="control-group">
+          <button class="primary" id="new-sheet">新規作成</button>
+          <button class="ghost" id="publish-sheet">${
+            state.published ? "公開中" : "公開する"
+          }</button>
         </div>
         <div class="control-group">
           <span class="url-label">URL</span>
@@ -308,6 +324,8 @@ const renderSheet = () => {
           <button class="ghost" id="regenerate" ${
             state.ownerMode ? "" : "disabled"
           }>作り変える</button>
+          <button class="accent" id="auto-shift">シフトを自動作成</button>
+          <button class="ghost" id="regenerate">作り変える</button>
         </div>
         <div class="control-group">
           <span class="helper-text">固定した日付は変更されません。</span>
@@ -562,6 +580,12 @@ document.body.addEventListener("click", (event) => {
         state.templateReady = false;
       }
       startOwnerSession(input.value.trim());
+  if (target.id === "create-owner") {
+    const input = document.getElementById("owner-name");
+    if (input instanceof HTMLInputElement && input.value.trim()) {
+      state.ownerName = input.value.trim();
+      state.view = "template";
+      renderApp();
     }
   }
 
@@ -581,6 +605,13 @@ document.body.addEventListener("click", (event) => {
       warnings: []
     };
     state.onboarding.sheet = true;
+    state.view = "sheet";
+    state.sheet = {
+      year: new Date().getFullYear(),
+      month: new Date().getMonth() + 1,
+      days: buildDays(new Date().getFullYear(), new Date().getMonth() + 1),
+      warnings: []
+    };
     renderApp();
   }
 
@@ -599,6 +630,16 @@ document.body.addEventListener("click", (event) => {
   }
 
   if (target.id === "regenerate" && state.ownerMode) {
+  if (target.id === "publish-sheet") {
+    state.published = !state.published;
+    renderApp();
+  }
+
+  if (target.id === "auto-shift") {
+    applyAssignments({ randomize: false });
+  }
+
+  if (target.id === "regenerate") {
     applyAssignments({ randomize: true });
   }
 
