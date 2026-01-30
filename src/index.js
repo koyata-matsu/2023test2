@@ -294,15 +294,21 @@ const openShiftVersionWindow = (versionLabel) => {
   if (!newWindow) return;
   newWindow.location.href = `about:blank#${versionLabel}`;
   const fixedSet = new Set(state.fixedDays);
+  const baseFixedDays = new Set(state.fixedDays);
   const requiredDay = state.sheet.days.map((day) => day.requiredDay);
   const requiredNight = state.sheet.days.map((day) => day.requiredNight);
   const dayLabels = state.sheet.days.map((day) => `${day.dateLabel}(${day.weekday})`);
+  const dayWeekdays = state.sheet.days.map((day) => day.weekday);
   const staffLimits = state.staff.map((person) => ({
     name: person.name,
     dayMin: person.dayMin,
     dayMax: person.dayMax,
     nightMin: person.nightMin,
     nightMax: person.nightMax
+  }));
+  const staffAvailability = state.staff.map((person) => ({
+    availabilityType: person.availabilityType,
+    availableWeekdays: person.availableWeekdays
   }));
   const rows = state.staff
     .map((person, rowIndex) => {
@@ -342,6 +348,7 @@ const openShiftVersionWindow = (versionLabel) => {
               <div>
                 <div>${day.dateLabel}</div>
                 <div class="weekday">${day.weekday}</div>
+                <div class="required-counts">日:${day.requiredDay} 夜:${day.requiredNight}</div>
               </div>
               <button class="fix-toggle" data-col="${day.index}">固定</button>
             </div>
@@ -359,9 +366,10 @@ const openShiftVersionWindow = (versionLabel) => {
           table { border-collapse: collapse; width: 100%; }
           th { background: #f8fafc; }
           th.shortage-col, td.shortage-col { background: #fee2e2; }
-          th.fixed-col, td.fixed-col { background: #dbeafe; }
+          th.fixed-col, td.fixed-col { background: #fef08a; }
           .header-cell { display: flex; flex-direction: column; gap: 6px; }
           .header-cell .weekday { font-size: 12px; color: #64748b; }
+          .header-cell .required-counts { font-size: 11px; color: #475569; }
           .fix-toggle {
             border: 1px solid #cbd5f5;
             background: #fff;
@@ -370,11 +378,12 @@ const openShiftVersionWindow = (versionLabel) => {
             padding: 2px 8px;
             cursor: pointer;
           }
-          .fix-toggle.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+          .fix-toggle.active { background: #f59e0b; color: #1f2937; border-color: #f59e0b; }
+          .fix-toggle[disabled] { opacity: 0.6; cursor: not-allowed; }
           .legend { display: flex; gap: 12px; margin: 12px 0; font-size: 12px; }
           .legend-item { display: flex; align-items: center; gap: 6px; }
           .legend-swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid #e2e8f0; }
-          .legend-fixed { background: #dbeafe; }
+          .legend-fixed { background: #fef08a; }
           .legend-shortage { background: #fee2e2; }
           .shift-result-actions { display: flex; justify-content: flex-end; margin: 8px 0 12px; }
           .shift-result-actions button {
@@ -395,7 +404,7 @@ const openShiftVersionWindow = (versionLabel) => {
         <h1>シフト結果 ${versionLabel}</h1>
         <p>${state.sheet.year}年${state.sheet.month}月</p>
         <div class="legend">
-          <div class="legend-item"><span class="legend-swatch legend-fixed"></span>青: これ以上動かせない</div>
+          <div class="legend-item"><span class="legend-swatch legend-fixed"></span>黄: これ以上動かせない</div>
           <div class="legend-item"><span class="legend-swatch legend-shortage"></span>赤: これじゃ人が足りない</div>
         </div>
         <div class="shift-result-actions">
@@ -421,8 +430,11 @@ const openShiftVersionWindow = (versionLabel) => {
           const requiredDay = ${JSON.stringify(requiredDay)};
           const requiredNight = ${JSON.stringify(requiredNight)};
           const dayLabels = ${JSON.stringify(dayLabels)};
+          const dayWeekdays = ${JSON.stringify(dayWeekdays)};
           const staffLimits = ${JSON.stringify(staffLimits)};
+          const staffAvailability = ${JSON.stringify(staffAvailability)};
           const fixedDays = new Set(${JSON.stringify(Array.from(fixedSet))});
+          const baseFixedDays = new Set(${JSON.stringify(Array.from(baseFixedDays))});
 
           const getNumeric = (value) => {
             const number = Number(value);
@@ -451,6 +463,7 @@ const openShiftVersionWindow = (versionLabel) => {
             const isFixed = fixedDays.has(index);
             button.classList.toggle('active', isFixed);
             button.textContent = isFixed ? '固定中' : '固定';
+            button.disabled = baseFixedDays.has(index);
             const cells = document.querySelectorAll(\`tbody td[data-col="\${index}"] select[data-action="edit-cell"]\`);
             cells.forEach((select) => {
               select.disabled = isFixed;
@@ -498,6 +511,9 @@ const openShiftVersionWindow = (versionLabel) => {
             const { dayCounts, nightCounts, rowCounts } = collectCounts();
             const warnings = [];
             requiredDay.forEach((required, index) => {
+              if (baseFixedDays.has(index)) {
+                fixedDays.add(index);
+              }
               const shortage =
                 !fixedDays.has(index) &&
                 (dayCounts[index] < required || nightCounts[index] < requiredNight[index]);
@@ -548,6 +564,22 @@ const openShiftVersionWindow = (versionLabel) => {
             nextCell.value = "※";
           };
 
+          const isStaffAvailableForDay = (rowIndex, colIndex) => {
+            const availability = staffAvailability[rowIndex];
+            if (!availability) return true;
+            const weekday = dayWeekdays[colIndex];
+            if (availability.availabilityType === "weekday") {
+              return weekday !== "土" && weekday !== "日";
+            }
+            if (availability.availabilityType === "specific") {
+              return (
+                Array.isArray(availability.availableWeekdays) &&
+                availability.availableWeekdays.includes(weekday)
+              );
+            }
+            return true;
+          };
+
           const enforceNightRests = () => {
             const rows = document.querySelectorAll('tbody tr');
             rows.forEach((row) => {
@@ -563,6 +595,18 @@ const openShiftVersionWindow = (versionLabel) => {
             const target = event.target;
             if (!(target instanceof HTMLSelectElement)) return;
             if (!target.matches('[data-action="edit-cell"]')) return;
+            const cell = target.closest('td');
+            if (cell) {
+              const rowIndex = Number(cell.dataset.row);
+              const colIndex = Number(cell.dataset.col);
+              if (
+                (target.value === "○" || target.value === "●") &&
+                !isStaffAvailableForDay(rowIndex, colIndex)
+              ) {
+                alert("注意！このスタッフはこの曜日に勤務できません。");
+                target.value = "";
+              }
+            }
             applyNightNextDay(target);
             updateWarnings();
           });
@@ -580,6 +624,7 @@ const openShiftVersionWindow = (versionLabel) => {
             if (!target.matches('.fix-toggle')) return;
             const index = Number(target.dataset.col);
             if (Number.isNaN(index)) return;
+            if (baseFixedDays.has(index)) return;
             if (fixedDays.has(index)) {
               fixedDays.delete(index);
             } else {
@@ -1163,6 +1208,56 @@ const applyAssignments = ({ randomize } = {}) => {
   const warnings = [];
   const blocked = new Set();
   const cells = Array.from(document.querySelectorAll(".shift-cell"));
+  const dayCounts = Array(state.staff.length).fill(0);
+  const nightCounts = Array(state.staff.length).fill(0);
+  const staffLimits = state.staff.map((person) => ({
+    shiftType: person.shiftType,
+    dayMin: person.dayMin,
+    dayMax: person.dayMax,
+    nightMin: person.nightMin,
+    nightMax: person.nightMax
+  }));
+
+  const parseLimit = (value) => {
+    const number = Number(value);
+    return Number.isFinite(number) && number >= 0 ? number : null;
+  };
+
+  const isOverMax = (rowIndex, shift) => {
+    const limits = staffLimits[rowIndex];
+    if (!limits) return false;
+    if (shift === "day") {
+      const max = parseLimit(limits.dayMax);
+      return max !== null && dayCounts[rowIndex] >= max;
+    }
+    const max = parseLimit(limits.nightMax);
+    return max !== null && nightCounts[rowIndex] >= max;
+  };
+
+  const isShiftTypeAllowed = (rowIndex, shift) => {
+    const type = staffLimits[rowIndex]?.shiftType;
+    if (shift === "day") return type !== "夜専";
+    if (shift === "night") return type !== "昼専";
+    return true;
+  };
+
+  const sortCandidates = (list, shift) => {
+    return list.sort((a, b) => {
+      const limitsA = staffLimits[a.rowIndex];
+      const limitsB = staffLimits[b.rowIndex];
+      const minA =
+        shift === "day" ? parseLimit(limitsA?.dayMin) : parseLimit(limitsA?.nightMin);
+      const minB =
+        shift === "day" ? parseLimit(limitsB?.dayMin) : parseLimit(limitsB?.nightMin);
+      const countA = shift === "day" ? dayCounts[a.rowIndex] : nightCounts[a.rowIndex];
+      const countB = shift === "day" ? dayCounts[b.rowIndex] : nightCounts[b.rowIndex];
+      const belowMinA = minA !== null && countA < minA;
+      const belowMinB = minB !== null && countB < minB;
+      if (belowMinA !== belowMinB) return belowMinA ? -1 : 1;
+      return countA - countB;
+    });
+  };
+
   cells.forEach((cell) => {
     cell.classList.remove("assigned");
     const label = cell.querySelector(".assigned-shift");
@@ -1183,11 +1278,12 @@ const applyAssignments = ({ randomize } = {}) => {
       if (!person) return;
       if (!isStaffAvailableForDay(person, day)) return;
       const value = state.shiftPreferences?.[rowIndex]?.[day.index] || "";
-      if (value !== "off") {
-        availableDay.push(cell);
+      if (value === "off") return;
+      if (isShiftTypeAllowed(rowIndex, "day") && !isOverMax(rowIndex, "day")) {
+        availableDay.push({ cell, rowIndex });
       }
-      if (value !== "off") {
-        availableNight.push(cell);
+      if (isShiftTypeAllowed(rowIndex, "night") && !isOverMax(rowIndex, "night")) {
+        availableNight.push({ cell, rowIndex });
       }
     });
 
@@ -1196,25 +1292,32 @@ const applyAssignments = ({ randomize } = {}) => {
       availableNight.sort(() => Math.random() - 0.5);
     }
 
-    const assign = (cellsToUse, required, label) => {
+    const assign = (cellsToUse, required, label, shift) => {
       let count = 0;
-      for (const cell of cellsToUse) {
+      const sortedCandidates = sortCandidates(cellsToUse, shift);
+      for (const entry of sortedCandidates) {
         if (count >= required) break;
-        const assignedLabel = cell.querySelector(".assigned-shift");
+        if (isOverMax(entry.rowIndex, shift)) continue;
+        const assignedLabel = entry.cell.querySelector(".assigned-shift");
         if (assignedLabel && assignedLabel.textContent) continue;
         assignedLabel.textContent = label;
-        cell.classList.add("assigned");
-        const rowIndex = Number(cell.dataset.row);
+        entry.cell.classList.add("assigned");
+        const rowIndex = entry.rowIndex;
         if (!Number.isNaN(rowIndex)) {
           state.assignments[rowIndex][day.index] = label;
+        }
+        if (shift === "day") {
+          dayCounts[rowIndex] += 1;
+        } else {
+          nightCounts[rowIndex] += 1;
         }
         count += 1;
       }
       return count;
     };
 
-    const dayCount = assign(availableDay, day.requiredDay, "○");
-    const nightCount = assign(availableNight, day.requiredNight, "●");
+    const dayCount = assign(availableDay, day.requiredDay, "○", "day");
+    const nightCount = assign(availableNight, day.requiredNight, "●", "night");
     if (dayCount < day.requiredDay || nightCount < day.requiredNight) {
       warnings.push(day.index);
       blocked.add(day.index);
