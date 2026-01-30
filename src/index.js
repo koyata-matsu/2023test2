@@ -69,6 +69,7 @@ const state = {
   published: false,
   fixedDays: new Set(),
   onboarding: createOnboardingState(),
+  warningMessage: "入力内容を確認してください。"
   todoPopup: "template",
   warningMessage: "入力内容を確認してください。"
   onboarding: createOnboardingState()
@@ -133,6 +134,365 @@ const renderTodoList = () => `
         .join("")}
     </ul>
   </section>
+`;
+
+const renderSteps = () => `
+  <section class="steps">
+    ${steps
+      .map((step) => {
+        const done = state.onboarding[step.key];
+        const active = step.key === getNextStepKey();
+        return `<div class="step ${done ? "done" : ""} ${
+          active ? "active" : ""
+        }">
+          <span class="step-indicator">${done ? "✓" : active ? "▶" : ""}</span>
+          <span class="step-label">${step.label}</span>
+        </div>`;
+      })
+      .join("")}
+  </section>
+`;
+
+const renderLogin = () => `
+  <div class="page login">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">バイトシフト調整</p>
+        <h1>ログイン / オーナー登録</h1>
+      </div>
+    </header>
+    <section class="card">
+      <label>
+        メールアドレス
+        <input id="owner-email" type="email" placeholder="owner@example.com" value="${
+          state.owner.email
+        }" />
+      </label>
+      <label>
+        パスワード
+        <input id="owner-password" type="password" placeholder="8文字以上" value="${
+          state.owner.password
+        }" />
+      </label>
+      <div class="button-row">
+        <button class="primary" id="login-owner">ログイン</button>
+      </div>
+    </section>
+  </div>
+`;
+
+const renderStaffRows = () => {
+  const canEditPreferences = state.ownerMode || state.published;
+  return state.staff
+    .map(
+      (person, rowIndex) => `
+        <tr data-row="${rowIndex}">
+          <th class="name-cell">
+            <div class="name-block">
+              <div class="name">${person.name}</div>
+              <div class="tags">
+                ${person.role ? `<span class="tag">${person.role}</span>` : ""}
+                ${person.limit ? `<span class="tag">${person.limit}</span>` : ""}
+                ${person.ward ? `<span class="tag">${person.ward}</span>` : ""}
+              </div>
+            </div>
+            <button class="settings-button" data-row="${rowIndex}" ${
+              state.ownerMode ? "" : "disabled"
+            }>設定</button>
+          </th>
+          ${state.sheet
+            ? state.sheet.days
+                .map(
+                  (_, colIndex) => `
+                    <td class="shift-cell" data-row="${rowIndex}" data-col="${colIndex}">
+                      <div class="cell-content">
+                        <select class="preference-select" data-row="${rowIndex}" data-col="${colIndex}" ${
+                          canEditPreferences ? "" : "disabled"
+                        }>
+                          ${preferenceOptions
+                            .map(
+                              (pref) =>
+                                `<option value="${pref.value}">${pref.label}</option>`
+                            )
+                            .join("")}
+                        </select>
+                        <input class="manual-input" placeholder="手動入力" ${
+                          state.ownerMode ? "" : "disabled"
+                        } />
+                        <div class="assigned-shift" aria-live="polite"></div>
+                      </div>
+                    </td>
+                  `
+                )
+                .join("")
+            : ""}
+        </tr>
+      `
+    )
+    .join("");
+};
+
+const renderTemplate = () => `
+  <div class="page">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">テンプレート作成</p>
+        <h1>${state.owner.email}</h1>
+      </div>
+      <div class="header-actions">
+        <button class="ghost" id="logout">ログアウト</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <div>
+        ${renderSteps()}
+        <section class="controls">
+          <div class="control-group">
+            <button class="primary" id="save-template">テンプレートを保存</button>
+          </div>
+        </section>
+
+        <section class="sheet">
+          <table class="shift-table" aria-label="テンプレートスタッフ一覧">
+            <thead>
+              <tr>
+                <th class="corner-cell">氏名</th>
+                <th class="day-cell">スタッフ設定</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${state.staff
+                .map(
+                  (person, rowIndex) => `
+                    <tr data-row="${rowIndex}">
+                      <th class="name-cell">
+                        <div class="name-block">
+                          <div class="name">${person.name}</div>
+                          <div class="tags">
+                            ${person.role ? `<span class="tag">${person.role}</span>` : ""}
+                            ${person.limit ? `<span class="tag">${person.limit}</span>` : ""}
+                            ${person.ward ? `<span class="tag">${person.ward}</span>` : ""}
+                          </div>
+                        </div>
+                      </th>
+                      <td class="template-cell">
+                        <button class="settings-button" data-row="${rowIndex}">設定</button>
+                      </td>
+                    </tr>
+                  `
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </section>
+      </div>
+      ${renderTodoList()}
+    </div>
+  </div>
+`;
+
+const renderSheet = () => {
+  if (!state.sheet) return "";
+  const generatedAt = state.sheet.generatedAt
+    ? `（更新: ${formatTimestamp(state.sheet.generatedAt)}）`
+    : "";
+  const headerCells = state.sheet.days
+    .map(
+      (day) => `
+        <th class="day-cell ${
+          state.sheet.warnings?.includes(day.index) ? "warning" : ""
+        }" data-col="${day.index}">
+          <div class="date-line">
+            <div>
+              <div class="date">${day.dateLabel}</div>
+              <div class="weekday">${day.weekday}</div>
+            </div>
+            <button class="fix-button" data-col="${day.index}">
+              ${state.fixedDays.has(day.index) ? "固定済" : "固定"}
+            </button>
+          </div>
+        </th>
+      `
+    )
+    .join("");
+
+  const requiredInputs = state.sheet.days
+    .map(
+      (day) => `
+        <th class="required-cell">
+          <div class="required-label">日勤</div>
+          <input class="required-input" type="number" min="0" value="${
+            day.requiredDay
+          }" data-col="${day.index}" data-shift="day" />
+          <div class="required-label">夜勤</div>
+          <input class="required-input" type="number" min="0" value="${
+            day.requiredNight
+          }" data-col="${day.index}" data-shift="night" />
+        </th>
+      `
+    )
+    .join("");
+
+  return `
+    <div class="page">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">公開前シート</p>
+          <h1>${state.sheet.year}年${state.sheet.month}月 ${generatedAt}</h1>
+        </div>
+        <div class="header-actions">
+          <div class="header-note">URLを公開すると希望入力が可能</div>
+          <span class="publish-status ${state.published ? "published" : "draft"}">
+            ${state.published ? "公開中" : "非公開"}
+          </span>
+          <button class="ghost" id="logout">ログアウト</button>
+        </div>
+      </header>
+
+      <div class="layout">
+        <div>
+          ${renderSteps()}
+
+          <section class="controls">
+            <div class="control-group">
+              <button class="primary" id="new-sheet">新規作成</button>
+              <button class="ghost" id="publish-sheet" ${
+                state.ownerMode ? "" : "disabled"
+              }>${state.published ? "公開を解除" : "公開する"}</button>
+            </div>
+            ${
+              state.published
+                ? `
+            <div class="control-group">
+              <span class="url-label">URL</span>
+              <span class="url-value">${getSheetUrl()}</span>
+            </div>
+            `
+                : ""
+            }
+          </section>
+
+          <section class="controls">
+            <div class="control-group">
+              <button class="accent" id="auto-shift" ${
+                state.ownerMode && state.published ? "" : "disabled"
+              }>シフトを自動作成</button>
+            </div>
+            <div class="control-group">
+              <span class="helper-text">固定した日付は変更されません。</span>
+            </div>
+          </section>
+
+          <section class="sheet">
+            <table class="shift-table" aria-label="シフト調整表">
+              <thead>
+                <tr>
+                  <th class="corner-cell">氏名</th>
+                  ${headerCells}
+                </tr>
+                <tr>
+                  <th class="corner-cell sub">最低必要人数</th>
+                  ${requiredInputs}
+                </tr>
+              </thead>
+              <tbody>
+                ${renderStaffRows()}
+              </tbody>
+            </table>
+          </section>
+        </div>
+        ${renderTodoList()}
+      </div>
+    </div>
+  `;
+};
+
+const renderSettingsDialog = () => `
+  <dialog class="settings-panel">
+    <form method="dialog" class="settings-content">
+      <header>
+        <h2><span class="settings-name"></span> の設定</h2>
+        <button type="button" class="close-button" data-action="close">×</button>
+      </header>
+      <label>
+        区分
+        <select id="role-select">
+          <option value="">未設定</option>
+          <option value="社員">社員</option>
+          <option value="パート">パート</option>
+          <option value="夜専">夜専</option>
+          <option value="日専">日専</option>
+        </select>
+      </label>
+      <label>
+        稼働上限
+        <select id="limit-select">
+          <option value="">指定なし</option>
+          <option value="週3まで">週3まで</option>
+        </select>
+      </label>
+      <label>
+        病棟条件
+        <select id="ward-select">
+          <option value="">指定なし</option>
+          <option value="病棟Aのみ">病棟Aのみ</option>
+          <option value="病棟B・Cのみ">病棟B・Cのみ</option>
+        </select>
+      </label>
+      <div class="panel-actions">
+        <button type="button" class="ghost" data-action="close">キャンセル</button>
+        <button type="submit" class="primary" data-action="save">保存</button>
+      </div>
+    </form>
+  </dialog>
+`;
+
+const renderSheetDialog = () => `
+  <dialog class="sheet-dialog">
+    <form method="dialog" class="settings-content">
+      <header>
+        <h2>新規シフト表を作成</h2>
+        <button type="button" class="close-button" data-action="close">×</button>
+      </header>
+      <label>
+        年
+        <input id="sheet-year" type="number" min="2023" value="${
+          state.sheet?.year || new Date().getFullYear()
+        }" />
+      </label>
+      <label>
+        月
+        <input id="sheet-month" type="number" min="1" max="12" value="${
+          state.sheet?.month || new Date().getMonth() + 1
+        }" />
+      </label>
+      <div class="panel-actions">
+        <button type="button" class="ghost" data-action="close">キャンセル</button>
+        <button type="submit" class="primary" data-action="create">
+          〇〇年◯月の新規シフト表を作成
+        </button>
+      </div>
+    </form>
+  </dialog>
+`;
+
+const renderWarningDialog = () => `
+  <dialog class="warning-dialog">
+    <form method="dialog" class="settings-content">
+      <header>
+        <h2>注意</h2>
+        <button type="button" class="close-button" data-action="close">×</button>
+      </header>
+      <p class="warning-text">${state.warningMessage}</p>
+      <div class="panel-actions">
+        <button type="button" class="ghost" data-action="close">戻る</button>
+        <button type="submit" class="primary" data-action="confirm">OK</button>
+      </div>
+    </form>
+  </dialog>
+`;
+
 `;
 
 const renderSteps = () => `
@@ -1180,6 +1540,17 @@ document.body.addEventListener("click", (event) => {
   }
 
   if (target.id === "auto-shift" && state.ownerMode) {
+    if (!state.published) {
+      state.warningMessage = "公開後にシフトを自動作成できます。";
+      openDialog(".warning-dialog");
+      return;
+    }
+    if (state.sheet) {
+      state.sheet.generatedAt = new Date();
+    }
+    applyAssignments({ randomize: false });
+  }
+
     if (state.sheet) {
       state.sheet.generatedAt = new Date();
     }
@@ -1310,6 +1681,7 @@ document.body.addEventListener("submit", (event) => {
       state.fixedDays.clear();
       state.published = false;
       state.view = "sheet";
+      state.onboarding.sheet = true;
         warnings: []
       };
       state.fixedDays.clear();
