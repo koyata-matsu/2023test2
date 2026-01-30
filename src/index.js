@@ -360,9 +360,6 @@ const openShiftVersionWindow = (versionLabel) => {
           th { background: #f8fafc; }
           th.shortage-col, td.shortage-col { background: #fee2e2; }
           th.fixed-col, td.fixed-col { background: #dbeafe; }
-          th.fixed-col.shortage-col, td.fixed-col.shortage-col {
-            background: linear-gradient(135deg, #dbeafe 0%, #dbeafe 50%, #fee2e2 50%, #fee2e2 100%);
-          }
           .header-cell { display: flex; flex-direction: column; gap: 6px; }
           .header-cell .weekday { font-size: 12px; color: #64748b; }
           .fix-toggle {
@@ -379,6 +376,14 @@ const openShiftVersionWindow = (versionLabel) => {
           .legend-swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid #e2e8f0; }
           .legend-fixed { background: #dbeafe; }
           .legend-shortage { background: #fee2e2; }
+          .shift-result-actions { display: flex; justify-content: flex-end; margin: 8px 0 12px; }
+          .shift-result-actions button {
+            border: 1px solid #cbd5f5;
+            background: #fff;
+            border-radius: 8px;
+            padding: 6px 12px;
+            cursor: pointer;
+          }
           select { padding: 4px 6px; border-radius: 6px; border: 1px solid #cbd5f5; }
           .summary-col { background: #f1f5f9; }
           .warning-panel { margin-top: 16px; padding: 12px; border: 1px solid #fca5a5; border-radius: 8px; background: #fef2f2; }
@@ -392,6 +397,9 @@ const openShiftVersionWindow = (versionLabel) => {
         <div class="legend">
           <div class="legend-item"><span class="legend-swatch legend-fixed"></span>青: これ以上動かせない</div>
           <div class="legend-item"><span class="legend-swatch legend-shortage"></span>赤: これじゃ人が足りない</div>
+        </div>
+        <div class="shift-result-actions">
+          <button id="regenerate-shift">作り直す</button>
         </div>
         <table>
           <thead>
@@ -427,7 +435,10 @@ const openShiftVersionWindow = (versionLabel) => {
             const applyClasses = (el) => {
               if (!el) return;
               el.classList.remove('fixed-col', 'shortage-col');
-              if (fixed) el.classList.add('fixed-col');
+              if (fixed) {
+                el.classList.add('fixed-col');
+                return;
+              }
               if (shortage) el.classList.add('shortage-col');
             };
             applyClasses(header);
@@ -488,7 +499,8 @@ const openShiftVersionWindow = (versionLabel) => {
             const warnings = [];
             requiredDay.forEach((required, index) => {
               const shortage =
-                dayCounts[index] < required || nightCounts[index] < requiredNight[index];
+                !fixedDays.has(index) &&
+                (dayCounts[index] < required || nightCounts[index] < requiredNight[index]);
               updateColumnClasses(index, {
                 fixed: fixedDays.has(index),
                 shortage
@@ -558,6 +570,13 @@ const openShiftVersionWindow = (versionLabel) => {
           document.addEventListener('click', (event) => {
             const target = event.target;
             if (!(target instanceof HTMLButtonElement)) return;
+            if (target.matches('#regenerate-shift')) {
+              const opener = window.opener;
+              if (!opener) return;
+              const actionButton = opener.document.getElementById('auto-shift');
+              if (actionButton) actionButton.click();
+              return;
+            }
             if (!target.matches('.fix-toggle')) return;
             const index = Number(target.dataset.col);
             if (Number.isNaN(index)) return;
@@ -1066,7 +1085,6 @@ const renderConfirmDialog = () => `
   </dialog>
 `;
 
-
 const renderApp = () => {
   let content = "";
   if (state.view === "login") {
@@ -1086,6 +1104,21 @@ const renderApp = () => {
     ${renderWarningDialog()}
     ${renderConfirmDialog()}
   `;
+};
+
+const renderAppPreserveScroll = () => {
+  const sheet = document.querySelector(".sheet");
+  const sheetScrollLeft = sheet ? sheet.scrollLeft : 0;
+  const sheetScrollTop = sheet ? sheet.scrollTop : 0;
+  const windowScrollX = window.scrollX;
+  const windowScrollY = window.scrollY;
+  renderApp();
+  const nextSheet = document.querySelector(".sheet");
+  if (nextSheet) {
+    nextSheet.scrollLeft = sheetScrollLeft;
+    nextSheet.scrollTop = sheetScrollTop;
+  }
+  window.scrollTo(windowScrollX, windowScrollY);
 };
 
 const openDialog = (selector) => {
@@ -1387,7 +1420,7 @@ document.body.addEventListener("click", (event) => {
     }
     state.shiftPreferences[rowIndex][colIndex] =
       state.shiftPreferences[rowIndex][colIndex] === "off" ? "" : "off";
-    renderApp();
+    renderAppPreserveScroll();
   }
 
   if (target.id === "logout") {
