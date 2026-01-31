@@ -933,7 +933,11 @@ const renderLogin = () => `
       <div class="button-row">
         <button class="primary" id="login-owner">ログイン</button>
         <button class="ghost" id="go-register">新規登録</button>
+        <button class="ghost" id="enter-guest">公開モードで閲覧</button>
       </div>
+      <p class="helper-text">
+        ログインできない場合は公開モードで閲覧できます（編集はできません）。
+      </p>
       <p class="helper-text">別端末でも使うにはサーバー接続が必要です。</p>
     </section>
   </div>
@@ -1037,8 +1041,12 @@ const renderGroupCreation = () => `
               グループ名
               <input id="group-name" type="text" value="${state.groupDraftName}" list="group-suggestions" />
             </label>
-            <button class="primary" id="save-group">勤務者登録を保存</button>
-            <button class="ghost" id="add-staff">勤務者を追加</button>
+            <button class="primary" id="save-group" ${
+              state.ownerMode ? "" : "disabled"
+            }>勤務者登録を保存</button>
+            <button class="ghost" id="add-staff" ${
+              state.ownerMode ? "" : "disabled"
+            }>勤務者を追加</button>
           </div>
           <span class="helper-text">グループ名を決めて勤務者を登録してください。</span>
         </section>
@@ -1063,7 +1071,9 @@ const renderGroupCreation = () => `
                       <th class="name-cell">
                         <div class="name-block">
                           <div class="name">${person.name || "（未入力）"}</div>
-                          <button class="edit-button" data-row="${rowIndex}">編集</button>
+                          <button class="edit-button" data-row="${rowIndex}" ${
+                            state.ownerMode ? "" : "disabled"
+                          }>編集</button>
                         </div>
                       </th>
                       <td>${person.employment || "-"}</td>
@@ -1094,10 +1104,13 @@ const renderGroupList = () => `
     <header class="app-header">
       <div>
         <p class="eyebrow">グループ一覧</p>
-        <h1>${state.owner.email}</h1>
+        <h1>${state.ownerMode ? state.owner.email || "シフト管理" : "公開モード"}</h1>
       </div>
       <div class="header-actions">
-        <button class="ghost" id="logout">ログアウト</button>
+        ${state.ownerMode
+          ? `<button class="ghost" id="logout">ログアウト</button>`
+          : `<button class="ghost" id="back-to-login">ログインへ戻る</button>`}
+        ${!state.ownerMode ? `<span class="mode-pill">閲覧専用</span>` : ""}
       </div>
     </header>
 
@@ -1105,10 +1118,18 @@ const renderGroupList = () => `
       <div>
         <section class="controls">
           <div class="control-group">
-            <button class="primary" id="create-group">グループを新規作成</button>
-            <button class="accent" id="new-sheet">シフトシートを作成する</button>
+            <button class="primary" id="create-group" ${
+              state.ownerMode ? "" : "disabled"
+            }>グループを新規作成</button>
+            <button class="accent" id="new-sheet" ${
+              state.ownerMode ? "" : "disabled"
+            }>シフトシートを作成する</button>
           </div>
-          <span class="helper-text">グループを選んで編集・シフト作成ができます。</span>
+          <span class="helper-text">${
+            state.ownerMode
+              ? "グループを選んで編集・シフト作成ができます。"
+              : "公開モードでは閲覧のみ可能です。編集にはログインが必要です。"
+          }</span>
         </section>
 
         <section class="sheet-list">
@@ -1125,7 +1146,7 @@ const renderGroupList = () => `
                       <div class="sheet-actions">
                         <button class="ghost" data-action="edit-group" data-name="${
                           group.name
-                        }">編集</button>
+                        }" ${state.ownerMode ? "" : "disabled"}>編集</button>
                       </div>
                     </div>
                   `
@@ -1152,7 +1173,7 @@ const renderGroupList = () => `
                         }">開く</button>
                         <button class="ghost" data-action="reset-sheet" data-id="${
                           sheet.id
-                        }">リセット</button>
+                        }" ${state.ownerMode ? "" : "disabled"}>リセット</button>
                       </div>
                     </div>
                   `
@@ -1183,7 +1204,9 @@ const renderSheet = () => {
               <div class="date">${day.dateLabel}</div>
               <div class="weekday">${day.weekday}</div>
             </div>
-            <button class="fix-button icon-button" data-col="${day.index}">
+            <button class="fix-button icon-button" data-col="${day.index}" ${
+              state.ownerMode ? "" : "disabled"
+            }>
               ${state.fixedDays.has(day.index) ? "固定" : "固定"}
             </button>
           </div>
@@ -1202,13 +1225,17 @@ const renderSheet = () => {
             <span class="required-label">日勤</span>
             <input class="required-input" type="number" min="0" value="${
               day.requiredDay
-            }" data-col="${day.index}" data-shift="day" />
+            }" data-col="${day.index}" data-shift="day" ${
+              state.ownerMode ? "" : "disabled"
+            } />
           </div>
           <div class="required-row">
             <span class="required-label">夜勤</span>
             <input class="required-input" type="number" min="0" value="${
               day.requiredNight
-            }" data-col="${day.index}" data-shift="night" />
+            }" data-col="${day.index}" data-shift="night" ${
+              state.ownerMode ? "" : "disabled"
+            } />
           </div>
         </th>
       `
@@ -1225,6 +1252,7 @@ const renderSheet = () => {
         </div>
         <div class="header-actions">
           <button class="ghost" id="back-to-dashboard">一覧に戻る</button>
+          ${!state.ownerMode ? `<span class="mode-pill">閲覧専用</span>` : ""}
         </div>
       </header>
 
@@ -1742,6 +1770,19 @@ const startOwnerSession = () => {
   renderApp();
 };
 
+const startGuestSession = () => {
+  state.view = "dashboard";
+  state.ownerMode = false;
+  setAuthToken("");
+  state.sheet = null;
+  state.currentSheetId = null;
+  state.selectedGroup = "";
+  const persisted = loadPersistedState();
+  state.groups = persisted?.groups ?? [];
+  state.sheets = persisted?.sheets ?? [];
+  renderApp();
+};
+
 const validateOwnerFields = () => {
   const { email, password } = state.owner;
   return email && password;
@@ -1890,6 +1931,11 @@ document.body.addEventListener("click", (event) => {
     return;
   }
 
+  if (target.id === "enter-guest") {
+    startGuestSession();
+    return;
+  }
+
   if (target.id === "login-owner" || target.id === "register-owner") {
     const emailInput = document.getElementById("owner-email");
     const passwordInput = document.getElementById("owner-password");
@@ -1914,6 +1960,7 @@ document.body.addEventListener("click", (event) => {
   }
 
   if (target.id === "create-group") {
+    if (!state.ownerMode) return;
     state.groupDraftName = "";
     state.staff = [createEmptyStaff()];
     state.view = "group";
@@ -1921,6 +1968,7 @@ document.body.addEventListener("click", (event) => {
   }
 
   if (target.id === "new-sheet") {
+    if (!state.ownerMode) return;
     if (state.groups.length === 0) {
       state.groupDraftName = "";
       state.staff = [createEmptyStaff()];
@@ -1937,11 +1985,13 @@ document.body.addEventListener("click", (event) => {
   }
 
   if (target.id === "add-staff") {
+    if (!state.ownerMode) return;
     state.staff = [...state.staff, createEmptyStaff()];
     renderApp();
   }
 
   if (target.id === "save-group") {
+    if (!state.ownerMode) return;
     const nameInput = document.getElementById("group-name");
     if (!(nameInput instanceof HTMLInputElement)) return;
     const groupName = nameInput.value.trim();
@@ -1962,6 +2012,7 @@ document.body.addEventListener("click", (event) => {
   }
 
   if (target.dataset.action === "edit-group") {
+    if (!state.ownerMode) return;
     const groupName = target.dataset.name;
     const group = state.groups.find((item) => item.name === groupName);
     if (!group) return;
@@ -1997,6 +2048,7 @@ document.body.addEventListener("click", (event) => {
   }
 
   if (target.classList.contains("fix-button")) {
+    if (!state.ownerMode) return;
     const index = Number(target.dataset.col);
     if (state.fixedDays.has(index)) {
       state.fixedDays.delete(index);
@@ -2029,6 +2081,7 @@ document.body.addEventListener("click", (event) => {
   }
 
   if (target.dataset.action === "reset-sheet") {
+    if (!state.ownerMode) return;
     const sheetId = target.dataset.id;
     if (!sheetId) return;
     const confirmed = window.confirm("このシフトをリセットして空にしますか？");
@@ -2059,6 +2112,7 @@ document.body.addEventListener("change", (event) => {
   const target = event.target;
 
   if (target instanceof HTMLInputElement && target.classList.contains("required-input")) {
+    if (!state.ownerMode) return;
     const col = Number(target.dataset.col);
     const shift = target.dataset.shift;
     const day = state.sheet?.days[col];
