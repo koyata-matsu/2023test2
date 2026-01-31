@@ -3,123 +3,113 @@ import "./styles.css";
 const initialStaff = [
   {
     name: "佐藤",
-    employment: "社員",
     shiftType: "どちらも",
     ward: "病棟Aのみ",
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "",
+    dayMax: "25",
     nightMin: "",
-    nightMax: ""
+    nightMax: "11"
   },
   {
     name: "鈴木",
-    employment: "パート",
     shiftType: "昼専",
     ward: "病棟B・Cのみ",
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "",
+    dayMax: "25",
     nightMin: "",
-    nightMax: ""
+    nightMax: "11"
   },
   {
     name: "高橋",
-    employment: "社員",
     shiftType: "夜専",
     ward: "",
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "",
+    dayMax: "25",
     nightMin: "",
-    nightMax: ""
+    nightMax: "11"
   },
   {
     name: "田中",
-    employment: "パート",
     shiftType: "昼専",
     ward: "病棟Aのみ",
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "",
+    dayMax: "25",
     nightMin: "",
-    nightMax: ""
+    nightMax: "11"
   },
   {
     name: "伊藤",
-    employment: "社員",
     shiftType: "どちらも",
     ward: "",
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "",
+    dayMax: "25",
     nightMin: "",
-    nightMax: ""
+    nightMax: "11"
   },
   {
     name: "渡辺",
-    employment: "パート",
     shiftType: "どちらも",
     ward: "",
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "",
+    dayMax: "25",
     nightMin: "",
-    nightMax: ""
+    nightMax: "11"
   },
   {
     name: "山本",
-    employment: "社員",
     shiftType: "夜専",
     ward: "病棟B・Cのみ",
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "",
+    dayMax: "25",
     nightMin: "",
-    nightMax: ""
+    nightMax: "11"
   },
   {
     name: "中村",
-    employment: "パート",
     shiftType: "どちらも",
     ward: "",
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "",
+    dayMax: "25",
     nightMin: "",
-    nightMax: ""
+    nightMax: "11"
   },
   {
     name: "小林",
-    employment: "社員",
     shiftType: "どちらも",
     ward: "",
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "",
+    dayMax: "25",
     nightMin: "",
-    nightMax: ""
+    nightMax: "11"
   },
   {
     name: "加藤",
-    employment: "パート",
     shiftType: "どちらも",
     ward: "",
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "",
+    dayMax: "25",
     nightMin: "",
-    nightMax: ""
+    nightMax: "11"
   }
 ];
 
@@ -135,15 +125,14 @@ const app = document.getElementById("app");
 
 const createEmptyStaff = () => ({
   name: "",
-  employment: "",
   shiftType: "",
   ward: "",
   availabilityType: "all",
   availableWeekdays: [],
   dayMin: "",
-  dayMax: "",
+  dayMax: "25",
   nightMin: "",
-  nightMax: ""
+  nightMax: "11"
 });
 
 const state = {
@@ -153,6 +142,7 @@ const state = {
     password: ""
   },
   authToken: "",
+  apiStatus: "unknown",
   staff: structuredClone(initialStaff),
   ownerMode: true,
   sheet: null,
@@ -296,6 +286,32 @@ const apiRequest = async (path, options = {}) => {
   }
   return response.json();
 };
+
+const checkApiHealth = async () => {
+  try {
+    const response = await fetch(`${API_BASE}/api/health`);
+    state.apiStatus = response.ok ? "online" : "error";
+  } catch (error) {
+    state.apiStatus = "offline";
+  }
+};
+
+const getApiStatusLabel = () => {
+  if (state.apiStatus === "online") return "サーバー接続: OK";
+  if (state.apiStatus === "offline") return "サーバー接続: 未接続";
+  if (state.apiStatus === "error") return "サーバー接続: エラー";
+  return "サーバー接続: 確認中";
+};
+
+const getApiStatusClass = () => {
+  if (state.apiStatus === "online") return "status-pill ok";
+  if (state.apiStatus === "offline") return "status-pill offline";
+  if (state.apiStatus === "error") return "status-pill error";
+  return "status-pill";
+};
+
+const getConnectionHelpMessage = () =>
+  "サーバーに接続できませんでした。公開サイトではAPIサーバーが必要です。npm run server を実行するか、SHIFT_API_BASE を正しいURLに設定してください。";
 
 const loadPersistedState = () => {
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -916,6 +932,7 @@ const renderLogin = () => `
         <p class="eyebrow">バイトシフト調整</p>
         <h1>ログイン</h1>
       </div>
+      <span class="${getApiStatusClass()}">${getApiStatusLabel()}</span>
     </header>
     <section class="card">
       <label>
@@ -933,7 +950,14 @@ const renderLogin = () => `
       <div class="button-row">
         <button class="primary" id="login-owner">ログイン</button>
         <button class="ghost" id="go-register">新規登録</button>
+        <button class="ghost" id="enter-guest">公開モードで閲覧</button>
       </div>
+      <p class="helper-text">
+        ログインできない場合は公開モードで閲覧できます（編集はできません）。
+      </p>
+      <p class="helper-text">
+        ${state.apiStatus === "offline" ? getConnectionHelpMessage() : ""}
+      </p>
       <p class="helper-text">別端末でも使うにはサーバー接続が必要です。</p>
     </section>
   </div>
@@ -947,6 +971,7 @@ const renderRegister = () => `
         <h1>新規登録</h1>
       </div>
       <div class="header-actions">
+        <span class="${getApiStatusClass()}">${getApiStatusLabel()}</span>
         <button class="ghost" id="back-to-login">ログインへ戻る</button>
       </div>
     </header>
@@ -966,6 +991,9 @@ const renderRegister = () => `
       <div class="button-row">
         <button class="primary" id="register-owner">登録する</button>
       </div>
+      <p class="helper-text">
+        ${state.apiStatus === "offline" ? getConnectionHelpMessage() : ""}
+      </p>
       <p class="helper-text">登録後、そのままログインして同期を開始します。</p>
     </section>
   </div>
@@ -980,7 +1008,6 @@ const renderStaffRows = () => {
             <div class="name-block">
               <div class="name">${person.name}</div>
               <div class="tags">
-                ${person.employment ? `<span class="tag">${person.employment}</span>` : ""}
                 ${person.shiftType ? `<span class="tag">${person.shiftType}</span>` : ""}
                 ${person.ward ? `<span class="tag">${person.ward}</span>` : ""}
                 ${getAvailabilityTag(person) ? `<span class="tag">${getAvailabilityTag(person)}</span>` : ""}
@@ -1037,8 +1064,12 @@ const renderGroupCreation = () => `
               グループ名
               <input id="group-name" type="text" value="${state.groupDraftName}" list="group-suggestions" />
             </label>
-            <button class="primary" id="save-group">勤務者登録を保存</button>
-            <button class="ghost" id="add-staff">勤務者を追加</button>
+            <button class="primary" id="save-group" ${
+              state.ownerMode ? "" : "disabled"
+            }>勤務者登録を保存</button>
+            <button class="ghost" id="add-staff" ${
+              state.ownerMode ? "" : "disabled"
+            }>勤務者を追加</button>
           </div>
           <span class="helper-text">グループ名を決めて勤務者を登録してください。</span>
         </section>
@@ -1048,7 +1079,6 @@ const renderGroupCreation = () => `
             <thead>
               <tr>
                 <th class="corner-cell">氏名</th>
-                <th class="day-cell">雇用</th>
                 <th class="day-cell">勤務</th>
                 <th class="day-cell">病棟</th>
                 <th class="day-cell">曜日指定</th>
@@ -1063,10 +1093,22 @@ const renderGroupCreation = () => `
                       <th class="name-cell">
                         <div class="name-block">
                           <div class="name">${person.name || "（未入力）"}</div>
-                          <button class="edit-button" data-row="${rowIndex}">編集</button>
+                          <div class="row-actions">
+                            <button class="edit-button" data-row="${rowIndex}" ${
+                              state.ownerMode ? "" : "disabled"
+                            }>編集</button>
+                            <button class="ghost action-button" data-action="move-up" data-row="${rowIndex}" ${
+                              state.ownerMode ? "" : "disabled"
+                            }>上へ</button>
+                            <button class="ghost action-button" data-action="move-down" data-row="${rowIndex}" ${
+                              state.ownerMode ? "" : "disabled"
+                            }>下へ</button>
+                            <button class="ghost action-button danger" data-action="delete-staff" data-row="${rowIndex}" ${
+                              state.ownerMode ? "" : "disabled"
+                            }>削除</button>
+                          </div>
                         </div>
                       </th>
-                      <td>${person.employment || "-"}</td>
                       <td>${person.shiftType || "-"}</td>
                       <td>${person.ward || "-"}</td>
                       <td>${getAvailabilityLabel(person)}</td>
@@ -1094,10 +1136,13 @@ const renderGroupList = () => `
     <header class="app-header">
       <div>
         <p class="eyebrow">グループ一覧</p>
-        <h1>${state.owner.email}</h1>
+        <h1>${state.ownerMode ? state.owner.email || "シフト管理" : "公開モード"}</h1>
       </div>
       <div class="header-actions">
-        <button class="ghost" id="logout">ログアウト</button>
+        ${state.ownerMode
+          ? `<button class="ghost" id="logout">ログアウト</button>`
+          : `<button class="ghost" id="back-to-login">ログインへ戻る</button>`}
+        ${!state.ownerMode ? `<span class="mode-pill">閲覧専用</span>` : ""}
       </div>
     </header>
 
@@ -1105,10 +1150,18 @@ const renderGroupList = () => `
       <div>
         <section class="controls">
           <div class="control-group">
-            <button class="primary" id="create-group">グループを新規作成</button>
-            <button class="accent" id="new-sheet">シフトシートを作成する</button>
+            <button class="primary" id="create-group" ${
+              state.ownerMode ? "" : "disabled"
+            }>グループを新規作成</button>
+            <button class="accent" id="new-sheet" ${
+              state.ownerMode ? "" : "disabled"
+            }>シフトシートを作成する</button>
           </div>
-          <span class="helper-text">グループを選んで編集・シフト作成ができます。</span>
+          <span class="helper-text">${
+            state.ownerMode
+              ? "グループを選んで編集・シフト作成ができます。"
+              : "公開モードでは閲覧のみ可能です。編集にはログインが必要です。"
+          }</span>
         </section>
 
         <section class="sheet-list">
@@ -1125,7 +1178,7 @@ const renderGroupList = () => `
                       <div class="sheet-actions">
                         <button class="ghost" data-action="edit-group" data-name="${
                           group.name
-                        }">編集</button>
+                        }" ${state.ownerMode ? "" : "disabled"}>編集</button>
                       </div>
                     </div>
                   `
@@ -1152,7 +1205,7 @@ const renderGroupList = () => `
                         }">開く</button>
                         <button class="ghost" data-action="reset-sheet" data-id="${
                           sheet.id
-                        }">リセット</button>
+                        }" ${state.ownerMode ? "" : "disabled"}>リセット</button>
                       </div>
                     </div>
                   `
@@ -1183,7 +1236,9 @@ const renderSheet = () => {
               <div class="date">${day.dateLabel}</div>
               <div class="weekday">${day.weekday}</div>
             </div>
-            <button class="fix-button icon-button" data-col="${day.index}">
+            <button class="fix-button icon-button" data-col="${day.index}" ${
+              state.ownerMode ? "" : "disabled"
+            }>
               ${state.fixedDays.has(day.index) ? "固定" : "固定"}
             </button>
           </div>
@@ -1202,13 +1257,17 @@ const renderSheet = () => {
             <span class="required-label">日勤</span>
             <input class="required-input" type="number" min="0" value="${
               day.requiredDay
-            }" data-col="${day.index}" data-shift="day" />
+            }" data-col="${day.index}" data-shift="day" ${
+              state.ownerMode ? "" : "disabled"
+            } />
           </div>
           <div class="required-row">
             <span class="required-label">夜勤</span>
             <input class="required-input" type="number" min="0" value="${
               day.requiredNight
-            }" data-col="${day.index}" data-shift="night" />
+            }" data-col="${day.index}" data-shift="night" ${
+              state.ownerMode ? "" : "disabled"
+            } />
           </div>
         </th>
       `
@@ -1225,6 +1284,7 @@ const renderSheet = () => {
         </div>
         <div class="header-actions">
           <button class="ghost" id="back-to-dashboard">一覧に戻る</button>
+          ${!state.ownerMode ? `<span class="mode-pill">閲覧専用</span>` : ""}
         </div>
       </header>
 
@@ -1264,14 +1324,6 @@ const renderSettingsDialog = () => `
       <label>
         氏名
         <input id="staff-name" type="text" placeholder="氏名を入力" />
-      </label>
-      <label>
-        雇用形態
-        <select id="employment-select">
-          <option value="">未設定</option>
-          <option value="社員">社員</option>
-          <option value="パート">パート</option>
-        </select>
       </label>
       <label>
         勤務タイプ
@@ -1563,6 +1615,28 @@ const resetState = () => {
   renderApp();
 };
 
+const moveStaffRow = (rowIndex, direction) => {
+  if (!Number.isFinite(rowIndex)) return;
+  const targetIndex = rowIndex + direction;
+  if (targetIndex < 0 || targetIndex >= state.staff.length) return;
+  const nextStaff = [...state.staff];
+  const [moved] = nextStaff.splice(rowIndex, 1);
+  nextStaff.splice(targetIndex, 0, moved);
+  state.staff = nextStaff;
+  renderApp();
+};
+
+const deleteStaffRow = (rowIndex) => {
+  if (!Number.isFinite(rowIndex)) return;
+  if (state.staff.length <= 1) {
+    state.warningMessage = "勤務者は最低1人必要です。";
+    openDialog(".warning-dialog");
+    return;
+  }
+  state.staff = state.staff.filter((_, index) => index !== rowIndex);
+  renderApp();
+};
+
 const applyAssignments = ({ randomize } = {}) => {
   if (!state.sheet) return;
   const warnings = [];
@@ -1719,7 +1793,6 @@ const openSettingsPanel = (rowIndex) => {
   if (!(panel instanceof HTMLDialogElement)) return;
   panel.querySelector(".settings-name").textContent = person.name;
   panel.querySelector("#staff-name").value = person.name;
-  panel.querySelector("#employment-select").value = person.employment;
   panel.querySelector("#shift-type-select").value = person.shiftType;
   panel.querySelector("#ward-select").value = person.ward;
   panel.querySelector("#availability-select").value = person.availabilityType;
@@ -1739,6 +1812,19 @@ const openSettingsPanel = (rowIndex) => {
 const startOwnerSession = () => {
   state.view = "dashboard";
   state.ownerMode = true;
+  renderApp();
+};
+
+const startGuestSession = () => {
+  state.view = "dashboard";
+  state.ownerMode = false;
+  setAuthToken("");
+  state.sheet = null;
+  state.currentSheetId = null;
+  state.selectedGroup = "";
+  const persisted = loadPersistedState();
+  state.groups = persisted?.groups ?? [];
+  state.sheets = persisted?.sheets ?? [];
   renderApp();
 };
 
@@ -1762,6 +1848,11 @@ const syncOwnerState = async () => {
 };
 
 const loginOwner = async ({ email, password }) => {
+  if (state.apiStatus === "offline") {
+    state.warningMessage = getConnectionHelpMessage();
+    openDialog(".warning-dialog");
+    return;
+  }
   try {
     const response = await apiRequest("/api/login", {
       method: "POST",
@@ -1773,12 +1864,20 @@ const loginOwner = async ({ email, password }) => {
     await syncOwnerState();
     startOwnerSession();
   } catch (error) {
-    state.warningMessage = error.message || "ログインに失敗しました。";
+    state.warningMessage =
+      error instanceof TypeError
+        ? getConnectionHelpMessage()
+        : error.message || "ログインに失敗しました。";
     openDialog(".warning-dialog");
   }
 };
 
 const registerOwner = async ({ email, password }) => {
+  if (state.apiStatus === "offline") {
+    state.warningMessage = getConnectionHelpMessage();
+    openDialog(".warning-dialog");
+    return;
+  }
   try {
     await apiRequest("/api/register", {
       method: "POST",
@@ -1786,7 +1885,10 @@ const registerOwner = async ({ email, password }) => {
     });
     await loginOwner({ email, password });
   } catch (error) {
-    state.warningMessage = error.message || "登録に失敗しました。";
+    state.warningMessage =
+      error instanceof TypeError
+        ? getConnectionHelpMessage()
+        : error.message || "登録に失敗しました。";
     openDialog(".warning-dialog");
   }
 };
@@ -1852,6 +1954,7 @@ const openSheetFromList = (sheetId) => {
 };
 
 const initApp = async () => {
+  await checkApiHealth();
   if (state.authToken) {
     try {
       const profile = await apiRequest("/api/me");
@@ -1890,6 +1993,11 @@ document.body.addEventListener("click", (event) => {
     return;
   }
 
+  if (target.id === "enter-guest") {
+    startGuestSession();
+    return;
+  }
+
   if (target.id === "login-owner" || target.id === "register-owner") {
     const emailInput = document.getElementById("owner-email");
     const passwordInput = document.getElementById("owner-password");
@@ -1914,6 +2022,7 @@ document.body.addEventListener("click", (event) => {
   }
 
   if (target.id === "create-group") {
+    if (!state.ownerMode) return;
     state.groupDraftName = "";
     state.staff = [createEmptyStaff()];
     state.view = "group";
@@ -1921,6 +2030,7 @@ document.body.addEventListener("click", (event) => {
   }
 
   if (target.id === "new-sheet") {
+    if (!state.ownerMode) return;
     if (state.groups.length === 0) {
       state.groupDraftName = "";
       state.staff = [createEmptyStaff()];
@@ -1937,11 +2047,13 @@ document.body.addEventListener("click", (event) => {
   }
 
   if (target.id === "add-staff") {
+    if (!state.ownerMode) return;
     state.staff = [...state.staff, createEmptyStaff()];
     renderApp();
   }
 
   if (target.id === "save-group") {
+    if (!state.ownerMode) return;
     const nameInput = document.getElementById("group-name");
     if (!(nameInput instanceof HTMLInputElement)) return;
     const groupName = nameInput.value.trim();
@@ -1962,6 +2074,7 @@ document.body.addEventListener("click", (event) => {
   }
 
   if (target.dataset.action === "edit-group") {
+    if (!state.ownerMode) return;
     const groupName = target.dataset.name;
     const group = state.groups.find((item) => item.name === groupName);
     if (!group) return;
@@ -1969,6 +2082,26 @@ document.body.addEventListener("click", (event) => {
     state.staff = structuredClone(group.staff);
     state.view = "group";
     renderApp();
+  }
+
+  if (target.dataset.action === "move-up") {
+    if (!state.ownerMode) return;
+    const rowIndex = Number(target.dataset.row);
+    moveStaffRow(rowIndex, -1);
+  }
+
+  if (target.dataset.action === "move-down") {
+    if (!state.ownerMode) return;
+    const rowIndex = Number(target.dataset.row);
+    moveStaffRow(rowIndex, 1);
+  }
+
+  if (target.dataset.action === "delete-staff") {
+    if (!state.ownerMode) return;
+    const rowIndex = Number(target.dataset.row);
+    const confirmed = window.confirm("この勤務者を削除しますか？");
+    if (!confirmed) return;
+    deleteStaffRow(rowIndex);
   }
 
   if (target.id === "auto-shift" && state.ownerMode) {
@@ -1997,6 +2130,7 @@ document.body.addEventListener("click", (event) => {
   }
 
   if (target.classList.contains("fix-button")) {
+    if (!state.ownerMode) return;
     const index = Number(target.dataset.col);
     if (state.fixedDays.has(index)) {
       state.fixedDays.delete(index);
@@ -2029,6 +2163,7 @@ document.body.addEventListener("click", (event) => {
   }
 
   if (target.dataset.action === "reset-sheet") {
+    if (!state.ownerMode) return;
     const sheetId = target.dataset.id;
     if (!sheetId) return;
     const confirmed = window.confirm("このシフトをリセットして空にしますか？");
@@ -2059,6 +2194,7 @@ document.body.addEventListener("change", (event) => {
   const target = event.target;
 
   if (target instanceof HTMLInputElement && target.classList.contains("required-input")) {
+    if (!state.ownerMode) return;
     const col = Number(target.dataset.col);
     const shift = target.dataset.shift;
     const day = state.sheet?.days[col];
@@ -2093,7 +2229,6 @@ document.body.addEventListener("submit", (event) => {
     event.preventDefault();
     const rowIndex = Number(panel.dataset.row);
     const nameInput = panel.querySelector("#staff-name");
-    const employmentSelect = panel.querySelector("#employment-select");
     const shiftTypeSelect = panel.querySelector("#shift-type-select");
     const wardSelect = panel.querySelector("#ward-select");
     const availabilitySelect = panel.querySelector("#availability-select");
@@ -2104,7 +2239,6 @@ document.body.addEventListener("submit", (event) => {
     const nightMaxInput = panel.querySelector("#night-max");
     if (
       nameInput instanceof HTMLInputElement &&
-      employmentSelect instanceof HTMLSelectElement &&
       shiftTypeSelect instanceof HTMLSelectElement &&
       wardSelect instanceof HTMLSelectElement &&
       availabilitySelect instanceof HTMLSelectElement &&
@@ -2114,7 +2248,6 @@ document.body.addEventListener("submit", (event) => {
       nightMaxInput instanceof HTMLInputElement
     ) {
       state.staff[rowIndex].name = nameInput.value.trim();
-      state.staff[rowIndex].employment = employmentSelect.value;
       state.staff[rowIndex].shiftType = shiftTypeSelect.value;
       state.staff[rowIndex].ward = wardSelect.value;
       state.staff[rowIndex].availabilityType = availabilitySelect.value;
