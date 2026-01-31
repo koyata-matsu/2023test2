@@ -288,9 +288,9 @@ if (persistedState) {
   state.sheets = persistedState.sheets;
 }
 
-const openShiftVersionWindow = (versionLabel) => {
+const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
   if (!state.sheet) return;
-  const newWindow = window.open("", "_blank");
+  const newWindow = targetWindow ?? window.open("", "_blank");
   if (!newWindow) return;
   newWindow.location.href = `about:blank#${versionLabel}`;
   const fixedSet = new Set(state.fixedDays);
@@ -700,9 +700,12 @@ const openShiftVersionWindow = (versionLabel) => {
             }
             if (target.matches('#regenerate-shift')) {
               const opener = window.opener;
-              if (!opener) return;
-              const actionButton = opener.document.getElementById('auto-shift');
-              if (actionButton) actionButton.click();
+              if (!opener || typeof opener.regenerateShiftVersion !== 'function') return;
+              const versionLabel = opener.regenerateShiftVersion();
+              if (!versionLabel) return;
+              const nextWindow = window.open('', '_blank');
+              if (!nextWindow || typeof opener.openShiftVersionWindow !== 'function') return;
+              opener.openShiftVersionWindow(versionLabel, nextWindow);
               return;
             }
             if (!target.matches('.fix-toggle')) return;
@@ -728,6 +731,17 @@ const openShiftVersionWindow = (versionLabel) => {
     </html>
   `);
   newWindow.document.close();
+};
+
+window.openShiftVersionWindow = openShiftVersionWindow;
+
+window.regenerateShiftVersion = () => {
+  if (!state.sheet) return null;
+  state.sheet.generatedAt = new Date();
+  applyAssignments({ randomize: true });
+  const versionLabel = `ver${state.shiftVersions.length + 1}`;
+  state.shiftVersions = [...state.shiftVersions, versionLabel];
+  return versionLabel;
 };
 
 const renderSidePanel = () => `
