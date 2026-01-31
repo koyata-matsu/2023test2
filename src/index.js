@@ -245,6 +245,7 @@ const getShortageDays = () => {
   state.sheet.days.forEach((day) => {
     const availableDay = [];
     const availableNight = [];
+    const requiredDay = Math.min(day.requiredDay, 6);
     state.staff.forEach((person, rowIndex) => {
       if (!isStaffAvailableForDay(person, day)) return;
       const pref = state.shiftPreferences?.[rowIndex]?.[day.index] || "";
@@ -252,7 +253,7 @@ const getShortageDays = () => {
       availableDay.push(rowIndex);
       availableNight.push(rowIndex);
     });
-    if (availableDay.length < day.requiredDay || availableNight.length < day.requiredNight) {
+    if (availableDay.length < requiredDay || availableNight.length < day.requiredNight) {
       shortages.push(day.index);
     }
   });
@@ -1292,7 +1293,7 @@ const renderSheet = () => {
         }">
           <div class="required-row">
             <span class="required-label">日勤</span>
-            <input class="required-input" type="number" min="0" value="${
+            <input class="required-input" type="number" min="0" max="6" value="${
               day.requiredDay
             }" data-col="${day.index}" data-shift="day" ${
               state.ownerMode ? "" : "disabled"
@@ -1734,6 +1735,8 @@ const applyAssignments = ({ randomize, silent } = {}) => {
   const cells = Array.from(document.querySelectorAll(".shift-cell"));
   const dayCounts = Array(state.staff.length).fill(0);
   const nightCounts = Array(state.staff.length).fill(0);
+  const firstHalfDayCounts = Array(state.staff.length).fill(0);
+  const secondHalfDayCounts = Array(state.staff.length).fill(0);
   const lastAssignedDay = Array(state.staff.length).fill(-Infinity);
   const lastNightDay = Array(state.staff.length).fill(-Infinity);
   const staffLimits = state.staff.map((person) => ({
@@ -1789,6 +1792,8 @@ const applyAssignments = ({ randomize, silent } = {}) => {
     return true;
   };
 
+  const midIndex = Math.floor((state.sheet.days.length - 1) / 2);
+
   const sortCandidates = (list, shift, dayIndex) => {
     return list.sort((a, b) => {
       const limitsA = staffLimits[a.rowIndex];
@@ -1818,6 +1823,16 @@ const applyAssignments = ({ randomize, silent } = {}) => {
       const belowMinB = minB !== null && countB < minB;
       if (belowMinA !== belowMinB) return belowMinA ? -1 : 1;
       if (countA !== countB) return countA - countB;
+      if (shift === "day" && Number.isFinite(dayIndex)) {
+        const inFirstHalf = dayIndex <= midIndex;
+        const balanceA = inFirstHalf
+          ? firstHalfDayCounts[a.rowIndex] - secondHalfDayCounts[a.rowIndex]
+          : secondHalfDayCounts[a.rowIndex] - firstHalfDayCounts[a.rowIndex];
+        const balanceB = inFirstHalf
+          ? firstHalfDayCounts[b.rowIndex] - secondHalfDayCounts[b.rowIndex]
+          : secondHalfDayCounts[b.rowIndex] - firstHalfDayCounts[b.rowIndex];
+        if (balanceA !== balanceB) return balanceA - balanceB;
+      }
       if (shift === "day" && Number.isFinite(dayIndex)) {
         const gapA = dayIndex - lastAssignedDay[a.rowIndex];
         const gapB = dayIndex - lastAssignedDay[b.rowIndex];
@@ -1930,6 +1945,11 @@ const applyAssignments = ({ randomize, silent } = {}) => {
       if (shift === "day") {
         dayCounts[rowIndex] += 1;
         lastAssignedDay[rowIndex] = dayIndex;
+        if (dayIndex <= midIndex) {
+          firstHalfDayCounts[rowIndex] += 1;
+        } else {
+          secondHalfDayCounts[rowIndex] += 1;
+        }
       } else {
         nightCounts[rowIndex] += 1;
         lastAssignedDay[rowIndex] = dayIndex;
@@ -1965,6 +1985,11 @@ const applyAssignments = ({ randomize, silent } = {}) => {
       if (shift === "day") {
         dayCounts[rowIndex] += 1;
         lastAssignedDay[rowIndex] = dayIndex;
+        if (dayIndex <= midIndex) {
+          firstHalfDayCounts[rowIndex] += 1;
+        } else {
+          secondHalfDayCounts[rowIndex] += 1;
+        }
       } else {
         nightCounts[rowIndex] += 1;
         lastAssignedDay[rowIndex] = dayIndex;
@@ -1997,6 +2022,11 @@ const applyAssignments = ({ randomize, silent } = {}) => {
       if (shift === "day") {
         dayCounts[rowIndex] += 1;
         lastAssignedDay[rowIndex] = dayIndex;
+        if (dayIndex <= midIndex) {
+          firstHalfDayCounts[rowIndex] += 1;
+        } else {
+          secondHalfDayCounts[rowIndex] += 1;
+        }
       } else {
         nightCounts[rowIndex] += 1;
         lastAssignedDay[rowIndex] = dayIndex;
@@ -2104,14 +2134,15 @@ const applyAssignments = ({ randomize, silent } = {}) => {
   daysPriority.forEach((day) => {
     if (state.fixedDays.has(day.index)) return;
     const { availableDay } = buildAvailable(day);
+    const dayRequired = Math.min(day.requiredDay, 6);
     let dayCount = assign(
       availableDay,
-      day.requiredDay,
+      dayRequired,
       "○",
       "day",
       day.index
     );
-    if (dayCount < day.requiredDay) {
+    if (dayCount < dayRequired) {
       const columnCells = cells.filter(
         (cell) => Number(cell.dataset.col) === day.index
       );
@@ -2130,15 +2161,14 @@ const applyAssignments = ({ randomize, silent } = {}) => {
       });
       dayCount += assignRelaxed(
         relaxedDay,
-        day.requiredDay - dayCount,
+        dayRequired - dayCount,
         "○",
         "day",
         day.index
       );
     }
-    assignExtras(availableDay, "○", "day", day.index);
     const nightCount = assignedNights.get(day.index) ?? 0;
-    if (dayCount < day.requiredDay || nightCount < day.requiredNight) {
+    if (dayCount < dayRequired || nightCount < day.requiredNight) {
       warnings.push(day.index);
       blocked.add(day.index);
     }
@@ -2580,7 +2610,9 @@ document.body.addEventListener("change", (event) => {
     const day = state.sheet?.days[col];
     if (!day) return;
     if (shift === "day") {
-      day.requiredDay = Number(target.value || 0);
+      const nextValue = Math.min(Number(target.value || 0), 6);
+      day.requiredDay = nextValue;
+      target.value = String(nextValue);
     } else {
       day.requiredNight = Number(target.value || 0);
     }
