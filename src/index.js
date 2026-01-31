@@ -228,7 +228,7 @@ const formatShiftLimits = (person) => {
 
 const sanitizeAssignments = (assignments, staff) => {
   if (!Array.isArray(assignments)) return [];
-  return assignments.map((row, rowIndex) => {
+  const sanitized = assignments.map((row, rowIndex) => {
     const shiftType = staff?.[rowIndex]?.shiftType;
     if (!Array.isArray(row)) return [];
     return row.map((value) => {
@@ -237,6 +237,19 @@ const sanitizeAssignments = (assignments, staff) => {
       return value;
     });
   });
+  sanitized.forEach((row) => {
+    row.forEach((value, index) => {
+      if (value !== "●") return;
+      const nextIndex = index + 1;
+      if (nextIndex >= row.length) return;
+      if (row[nextIndex] === "●") {
+        row[nextIndex] = "※";
+      } else if (!row[nextIndex]) {
+        row[nextIndex] = "※";
+      }
+    });
+  });
+  return sanitized;
 };
 
 const isStaffAvailableForDay = (person, day) => {
@@ -2073,10 +2086,12 @@ const applyAssignments = ({ randomize, silent } = {}) => {
       );
       if (!nextCell) return;
       const nextLabel = nextCell.querySelector(".assigned-shift");
-      if (!nextLabel || nextLabel.textContent) return;
-      nextLabel.textContent = "※";
-      nextCell.classList.add("assigned");
-      state.assignments[rowIndex][colIndex + 1] = "※";
+      if (!nextLabel) return;
+      if (nextLabel.textContent === "●" || !nextLabel.textContent) {
+        nextLabel.textContent = "※";
+        nextCell.classList.add("assigned");
+        state.assignments[rowIndex][colIndex + 1] = "※";
+      }
     });
   };
 
