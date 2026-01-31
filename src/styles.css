@@ -494,12 +494,15 @@ body {
   text-align: left;
 }
 
-.name-cell .icon-button {
-  align-self: flex-end;
+.name-cell .name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .name-cell .settings-button {
-  margin-top: 8px;
+  margin-top: 0;
 }
 
 .name-cell .name {

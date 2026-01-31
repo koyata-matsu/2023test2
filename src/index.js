@@ -1009,16 +1009,18 @@ const renderStaffRows = () => {
         <tr data-row="${rowIndex}">
           <th class="name-cell">
             <div class="name-block">
-              <div class="name">${person.name}</div>
+              <div class="name-row">
+                <div class="name">${person.name}</div>
+                <button class="settings-button icon-button" data-row="${rowIndex}" ${
+                  state.ownerMode ? "" : "disabled"
+                } aria-label="スタッフ設定">⚙</button>
+              </div>
               <div class="tags">
                 ${person.shiftType ? `<span class="tag">${person.shiftType}</span>` : ""}
                 ${person.ward ? `<span class="tag">${person.ward}</span>` : ""}
                 ${getAvailabilityTag(person) ? `<span class="tag">${getAvailabilityTag(person)}</span>` : ""}
               </div>
             </div>
-            <button class="settings-button icon-button" data-row="${rowIndex}" ${
-              state.ownerMode ? "" : "disabled"
-            } aria-label="スタッフ設定">⚙</button>
           </th>
           ${state.sheet
             ? state.sheet.days
