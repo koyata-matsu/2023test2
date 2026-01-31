@@ -335,7 +335,12 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
         .join("");
       return `
         <tr>
-          <th style="border:1px solid #d1d5db;padding:6px;text-align:left;">${person.name}</th>
+          <th style="border:1px solid #d1d5db;padding:6px;text-align:left;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <span>${person.name}</span>
+              <button class="row-fix-toggle" data-row="${rowIndex}">固定</button>
+            </div>
+          </th>
           ${cells}
           <td class="summary-col" data-summary="${rowIndex}" style="border:1px solid #d1d5db;padding:6px;text-align:center;">-</td>
         </tr>
@@ -369,11 +374,12 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
           table { border-collapse: collapse; width: 100%; }
           th { background: #f8fafc; }
           th.shortage-col, td.shortage-col { background: #fee2e2; }
-          th.fixed-col, td.fixed-col { background: #fef08a; }
+          th.fixed-row, td.fixed-row { background: #fef08a; }
           .header-cell { display: flex; flex-direction: column; gap: 6px; }
           .header-cell .weekday { font-size: 12px; color: #64748b; }
           .header-cell .required-counts { font-size: 11px; color: #475569; }
-          .fix-toggle {
+          .fix-toggle,
+          .row-fix-toggle {
             border: 1px solid #cbd5f5;
             background: #fff;
             border-radius: 999px;
@@ -383,6 +389,8 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
           }
           .fix-toggle.active { background: #f59e0b; color: #1f2937; border-color: #f59e0b; }
           .fix-toggle[disabled] { opacity: 0.6; cursor: not-allowed; }
+          .row-fix-toggle.active { background: #f59e0b; color: #1f2937; border-color: #f59e0b; }
+          .row-fix-toggle[disabled] { opacity: 0.6; cursor: not-allowed; }
           .legend { display: flex; gap: 12px; margin: 12px 0; font-size: 12px; }
           .legend-item { display: flex; align-items: center; gap: 6px; }
           .legend-swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid #e2e8f0; }
@@ -437,7 +445,7 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
         <h1>シフト結果 ${versionLabel}</h1>
         <p>${state.sheet.year}年${state.sheet.month}月</p>
         <div class="legend">
-          <div class="legend-item"><span class="legend-swatch legend-fixed"></span>黄: これ以上動かせない</div>
+          <div class="legend-item"><span class="legend-swatch legend-fixed"></span>黄: このスタッフは固定</div>
           <div class="legend-item"><span class="legend-swatch legend-shortage"></span>赤: これじゃ人が足りない</div>
         </div>
         <div class="shift-result-actions">
@@ -481,6 +489,7 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
           const fixedDays = new Set(${JSON.stringify(Array.from(fixedSet))});
           const baseFixedDays = new Set(${JSON.stringify(Array.from(baseFixedDays))});
           const sheetId = ${JSON.stringify(sheetId)};
+          const fixedRows = new Set();
           let currentWarnings = [];
 
           const getNumeric = (value) => {
@@ -490,16 +499,12 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
             return Number.isFinite(number) && number >= 0 ? number : null;
           };
 
-          const updateColumnClasses = (index, { fixed, shortage }) => {
+          const updateColumnClasses = (index, { shortage }) => {
             const header = document.querySelector(\`thead th[data-col="\${index}"]\`);
             const cells = document.querySelectorAll(\`tbody td[data-col="\${index}"]\`);
             const applyClasses = (el) => {
               if (!el) return;
-              el.classList.remove('fixed-col', 'shortage-col');
-              if (fixed) {
-                el.classList.add('fixed-col');
-                return;
-              }
+              el.classList.remove('shortage-col');
               if (shortage) el.classList.add('shortage-col');
             };
             applyClasses(header);
@@ -515,7 +520,30 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
             button.disabled = baseFixedDays.has(index);
             const cells = document.querySelectorAll(\`tbody td[data-col="\${index}"] select[data-action="edit-cell"]\`);
             cells.forEach((select) => {
-              select.disabled = isFixed;
+              const cell = select.closest('td');
+              const rowIndex = cell ? Number(cell.dataset.row) : null;
+              const isRowFixed = rowIndex !== null && fixedRows.has(rowIndex);
+              select.disabled = isFixed || isRowFixed;
+            });
+          };
+
+          const updateRowFixedState = (rowIndex) => {
+            const button = document.querySelector(\`.row-fix-toggle[data-row="\${rowIndex}"]\`);
+            if (!button) return;
+            const isFixed = fixedRows.has(rowIndex);
+            button.classList.toggle('active', isFixed);
+            button.textContent = isFixed ? '固定中' : '固定';
+            const row = button.closest('tr');
+            if (!row) return;
+            row.querySelectorAll('th, td').forEach((cell) => {
+              cell.classList.toggle('fixed-row', isFixed);
+            });
+            const selects = row.querySelectorAll('select[data-action="edit-cell"]');
+            selects.forEach((select) => {
+              const cell = select.closest('td');
+              const colIndex = cell ? Number(cell.dataset.col) : null;
+              const isColFixed = colIndex !== null && fixedDays.has(colIndex);
+              select.disabled = isFixed || isColFixed;
             });
           };
 
@@ -642,7 +670,6 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
                 !fixedDays.has(index) &&
                 (dayCounts[index] < required || nightCounts[index] < requiredNight[index]);
               updateColumnClasses(index, {
-                fixed: fixedDays.has(index),
                 shortage
               });
               if (shortage) {
@@ -765,6 +792,18 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
               opener.openShiftVersionWindow(versionLabel, nextWindow);
               return;
             }
+            if (target.matches('.row-fix-toggle')) {
+              const rowIndex = Number(target.dataset.row);
+              if (Number.isNaN(rowIndex)) return;
+              if (fixedRows.has(rowIndex)) {
+                fixedRows.delete(rowIndex);
+              } else {
+                fixedRows.add(rowIndex);
+              }
+              updateRowFixedState(rowIndex);
+              updateWarnings();
+              return;
+            }
             if (!target.matches('.fix-toggle')) return;
             const index = Number(target.dataset.col);
             if (Number.isNaN(index)) return;
@@ -780,6 +819,9 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
 
           requiredDay.forEach((_, index) => {
             updateFixedButtonState(index);
+          });
+          staffLimits.forEach((_, rowIndex) => {
+            updateRowFixedState(rowIndex);
           });
           enforceNightRests();
           updateWarnings();
@@ -880,7 +922,7 @@ const renderStaffRows = () => {
                         <button class="rest-button ${preference ? "active" : ""}" ${
                           state.ownerMode ? "" : "disabled"
                         } aria-pressed="${preference ? "true" : "false"}">休み</button>
-                        <div class="assigned-shift" aria-live="polite">${assigned}</div>
+                        <div class="assigned-shift" aria-live="polite"></div>
                       </div>
                     </td>
                   `;
