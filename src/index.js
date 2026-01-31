@@ -595,16 +595,47 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
             return true;
           };
 
+          const getCellValue = (rowIndex, colIndex) => {
+            const select = document.querySelector(
+              'tbody td[data-row="' +
+                rowIndex +
+                '"][data-col="' +
+                colIndex +
+                '"] select[data-action="edit-cell"]'
+            );
+            return select?.value ?? "";
+          };
+
           const buildShortageReasons = (colIndex, rowCounts) => {
             const reasons = {
-              day: { available: 0, off: 0, unavailable: 0, shiftType: 0, maxed: 0 },
-              night: { available: 0, off: 0, unavailable: 0, shiftType: 0, maxed: 0 }
+              day: {
+                available: 0,
+                off: 0,
+                unavailable: 0,
+                assigned: 0,
+                shiftType: 0,
+                maxed: 0
+              },
+              night: {
+                available: 0,
+                off: 0,
+                unavailable: 0,
+                assigned: 0,
+                shiftType: 0,
+                maxed: 0
+              }
             };
             staffAvailability.forEach((_, rowIndex) => {
+              const cellValue = getCellValue(rowIndex, colIndex);
               const isOff = shiftPreferences?.[rowIndex]?.[colIndex] === "off";
-              if (isOff) {
+              if (isOff || cellValue === "休") {
                 reasons.day.off += 1;
                 reasons.night.off += 1;
+                return;
+              }
+              if (cellValue === "○" || cellValue === "●" || cellValue === "※") {
+                reasons.day.assigned += 1;
+                reasons.night.assigned += 1;
                 return;
               }
               if (!isStaffAvailableForDay(rowIndex, colIndex)) {
@@ -648,14 +679,11 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
                 const reasons = buildShortageReasons(index, rowCounts);
                 warnings.push(\`\${dayLabels[index]}: 日勤 \${dayCounts[index]}/\${required}, 夜勤 \${nightCounts[index]}/\${requiredNight[index]} が不足\`);
                 warnings.push(
-                  \`理由(日勤): 勤務可能\${reasons.day.available}名 / 休み希望\${reasons.day.off}名 / 曜日不可\${reasons.day.unavailable}名 / 勤務タイプ不可\${reasons.day.shiftType}名 / 上限到達\${reasons.day.maxed}名\`
+                  \`理由(日勤): 勤務可能\${reasons.day.available}名 / 休み希望\${reasons.day.off}名 / 曜日不可\${reasons.day.unavailable}名 / 当日割当済み\${reasons.day.assigned}名 / 勤務タイプ不可\${reasons.day.shiftType}名 / 上限到達\${reasons.day.maxed}名\`
                 );
                 warnings.push(
-                  \`理由(夜勤): 勤務可能\${reasons.night.available}名 / 休み希望\${reasons.night.off}名 / 曜日不可\${reasons.night.unavailable}名 / 勤務タイプ不可\${reasons.night.shiftType}名 / 上限到達\${reasons.night.maxed}名\`
+                  \`理由(夜勤): 勤務可能\${reasons.night.available}名 / 休み希望\${reasons.night.off}名 / 曜日不可\${reasons.night.unavailable}名 / 当日割当済み\${reasons.night.assigned}名 / 勤務タイプ不可\${reasons.night.shiftType}名 / 上限到達\${reasons.night.maxed}名\`
                 );
-                if (reasons.day.available > 0 || reasons.night.available > 0) {
-                  warnings.push("備考: 勤務可能な人はいますが未割り当てです。手動で追加するか「作り直す」を実行してください。");
-                }
               }
             });
             staffLimits.forEach((limit, index) => {
@@ -735,6 +763,10 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
                 requiredDay,
                 requiredNight
               });
+              if (typeof opener.notifyShiftSaved === 'function') {
+                opener.notifyShiftSaved();
+              }
+              window.close();
               return;
             }
             if (target.matches('#print-shift')) {
@@ -1363,6 +1395,16 @@ window.saveShiftResult = ({ sheetId, assignments, fixedCells, requiredDay, requi
   }
   persistState();
   renderApp();
+};
+
+window.notifyShiftSaved = () => {
+  state.warningMessage = "保存が完了しました。シフト表に戻ります。";
+  state.view = "sheet";
+  renderApp();
+  const dialog = document.querySelector(".warning-dialog");
+  if (dialog instanceof HTMLDialogElement) {
+    dialog.showModal();
+  }
 };
 
 const resetSavedSheet = (sheetId) => {
