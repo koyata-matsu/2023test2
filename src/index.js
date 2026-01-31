@@ -152,6 +152,7 @@ const state = {
     email: "",
     password: ""
   },
+  authToken: "",
   staff: structuredClone(initialStaff),
   ownerMode: true,
   sheet: null,
@@ -264,6 +265,37 @@ const getShortageDays = () => {
 };
 
 const STORAGE_KEY = "shiftAppData";
+const AUTH_TOKEN_KEY = "shiftAuthToken";
+const API_BASE = window.SHIFT_API_BASE || "http://localhost:3001";
+
+const setAuthToken = (token) => {
+  state.authToken = token || "";
+  if (token) {
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
+};
+
+const apiRequest = async (path, options = {}) => {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {})
+  };
+  if (state.authToken) {
+    headers.Authorization = `Bearer ${state.authToken}`;
+  }
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers
+  });
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    const errorMessage = errorBody.error || "サーバーエラーが発生しました。";
+    throw new Error(errorMessage);
+  }
+  return response.json();
+};
 
 const loadPersistedState = () => {
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -275,18 +307,38 @@ const loadPersistedState = () => {
   };
 };
 
+const loadRemoteState = async () => {
+  if (!state.authToken) return null;
+  try {
+    return await apiRequest("/api/state");
+  } catch (error) {
+    state.warningMessage = "サーバーに接続できませんでした。ローカル保存で続行します。";
+    openDialog(".warning-dialog");
+    return null;
+  }
+};
+
 const persistState = () => {
   const payload = {
     groups: state.groups,
     sheets: state.sheets
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  if (state.authToken) {
+    apiRequest("/api/state", {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    }).catch(() => {
+      state.warningMessage = "サーバーへの保存に失敗しました。";
+      openDialog(".warning-dialog");
+    });
+  }
 };
 
 const persistedState = loadPersistedState();
-if (persistedState) {
-  state.groups = persistedState.groups;
-  state.sheets = persistedState.sheets;
+const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
+if (storedToken) {
+  state.authToken = storedToken;
 }
 
 const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
@@ -880,7 +932,9 @@ const renderLogin = () => `
       </label>
       <div class="button-row">
         <button class="primary" id="login-owner">ログイン</button>
+        <button class="ghost" id="register-owner">新規登録</button>
       </div>
+      <p class="helper-text">別端末でも使うにはサーバー接続が必要です。</p>
     </section>
   </div>
 `;
@@ -1659,6 +1713,58 @@ const validateOwnerFields = () => {
   return email && password;
 };
 
+const syncOwnerState = async () => {
+  const remote = await loadRemoteState();
+  if (remote) {
+    state.groups = remote.groups;
+    state.sheets = remote.sheets;
+    return true;
+  }
+  if (persistedState) {
+    state.groups = persistedState.groups;
+    state.sheets = persistedState.sheets;
+  }
+  return false;
+};
+
+const loginOwner = async ({ email, password }) => {
+  try {
+    const response = await apiRequest("/api/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password })
+    });
+    setAuthToken(response.token);
+    state.owner.email = response.email;
+    state.owner.password = "";
+    await syncOwnerState();
+    startOwnerSession();
+  } catch (error) {
+    state.warningMessage = error.message || "ログインに失敗しました。";
+    openDialog(".warning-dialog");
+  }
+};
+
+const registerOwner = async ({ email, password }) => {
+  try {
+    await apiRequest("/api/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password })
+    });
+    await loginOwner({ email, password });
+  } catch (error) {
+    state.warningMessage = error.message || "登録に失敗しました。";
+    openDialog(".warning-dialog");
+  }
+};
+
+const logoutOwner = async () => {
+  if (state.authToken) {
+    apiRequest("/api/logout", { method: "POST" }).catch(() => {});
+  }
+  setAuthToken("");
+  resetState();
+};
+
 const openSheetFromList = (sheetId) => {
   const sheet = state.sheets.find((item) => item.id === sheetId);
   if (!sheet) return;
@@ -1711,29 +1817,53 @@ const openSheetFromList = (sheetId) => {
   renderApp();
 };
 
-renderApp();
+const initApp = async () => {
+  if (state.authToken) {
+    try {
+      const profile = await apiRequest("/api/me");
+      state.owner.email = profile.email;
+      await syncOwnerState();
+      state.view = "dashboard";
+    } catch (error) {
+      setAuthToken("");
+      if (persistedState) {
+        state.groups = persistedState.groups;
+        state.sheets = persistedState.sheets;
+      }
+    }
+  } else if (persistedState) {
+    state.groups = persistedState.groups;
+    state.sheets = persistedState.sheets;
+  }
+  renderApp();
+};
+
+void initApp();
 
 document.body.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
 
-  if (target.id === "login-owner") {
+  if (target.id === "login-owner" || target.id === "register-owner") {
     const emailInput = document.getElementById("owner-email");
     const passwordInput = document.getElementById("owner-password");
     if (
       emailInput instanceof HTMLInputElement &&
       passwordInput instanceof HTMLInputElement
     ) {
-      state.owner = {
-        email: emailInput.value.trim(),
-        password: passwordInput.value.trim()
-      };
+      const email = emailInput.value.trim();
+      const password = passwordInput.value.trim();
+      state.owner = { email, password };
       if (!validateOwnerFields()) {
         state.warningMessage = "メールアドレスとパスワードを入力してください。";
         openDialog(".warning-dialog");
         return;
       }
-      startOwnerSession();
+      if (target.id === "register-owner") {
+        void registerOwner({ email, password });
+      } else {
+        void loginOwner({ email, password });
+      }
     }
   }
 
@@ -1844,7 +1974,7 @@ document.body.addEventListener("click", (event) => {
   }
 
   if (target.id === "logout") {
-    resetState();
+    void logoutOwner();
   }
 
   if (target.dataset.action === "open-sheet") {

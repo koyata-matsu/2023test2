@@ -5,9 +5,16 @@
   "main": "index.html",
   "scripts": {
     "start": "parcel index.html --open",
-    "build": "parcel build index.html"
+    "build": "parcel build index.html",
+    "server": "node server/server.js"
   },
-  "dependencies": { "parcel-bundler": "^1.6.1" },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "parcel-bundler": "^1.6.1",
+    "sqlite3": "^5.1.7"
+  },
   "devDependencies": {
     "@babel/core": "7.2.0",
     "typescript": "4.4.4"

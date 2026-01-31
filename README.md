@@ -1,2 +1,14 @@
 # 2023test2
-Created with CodeSandbox
+
+## 開発
+
+### フロントエンド
+```
+npm run start
+```
+
+### サーバー(API)
+別端末でも同じデータを使えるようにするため、簡易APIサーバーを追加しています。
+```
+npm run server
+```
