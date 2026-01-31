@@ -159,6 +159,7 @@ const state = {
   warningMessage: "入力内容を確認してください。",
   confirmMessage: "",
   pendingShift: false,
+  loadingShift: false,
   selectedGroup: ""
 };
 
@@ -813,7 +814,7 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
             updateWarnings();
           });
 
-          document.addEventListener('click', (event) => {
+          document.addEventListener('click', async (event) => {
             const target = event.target;
             if (!(target instanceof HTMLButtonElement)) return;
             if (target.matches('#save-shift')) {
@@ -860,7 +861,7 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
             if (target.matches('#regenerate-shift')) {
               const opener = window.opener;
               if (!opener || typeof opener.regenerateShiftVersion !== 'function') return;
-              const versionLabel = opener.regenerateShiftVersion();
+              const versionLabel = await opener.regenerateShiftVersion();
               if (!versionLabel) return;
               const nextWindow = window.open('', '_blank');
               if (!nextWindow || typeof opener.openShiftVersionWindow !== 'function') return;
@@ -898,10 +899,9 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
 
 window.openShiftVersionWindow = openShiftVersionWindow;
 
-window.regenerateShiftVersion = () => {
+window.regenerateShiftVersion = async () => {
   if (!state.sheet) return null;
-  createShiftVersion();
-  return state.shiftVersions[state.shiftVersions.length - 1] ?? null;
+  return await createShiftVersion();
 };
 
 const renderSidePanel = () => `
@@ -935,8 +935,13 @@ const renderSidePanel = () => `
           </label>
         </div>
         <button class="accent" id="auto-shift" ${
-          state.ownerMode ? "" : "disabled"
+          state.ownerMode && !state.loadingShift ? "" : "disabled"
         }>シフトを作成する</button>
+        ${
+          state.loadingShift
+            ? '<p class="loading-indicator" aria-live="polite">シフト作成中...</p>'
+            : ""
+        }
         <p class="helper-text">固定した日付は変更されません。</p>
       </section>
     `
@@ -1624,6 +1629,7 @@ const resetState = () => {
   state.warningMessage = "入力内容を確認してください。";
   state.confirmMessage = "";
   state.pendingShift = false;
+  state.loadingShift = false;
   state.selectedGroup = "";
   renderApp();
 };
@@ -1650,8 +1656,13 @@ const deleteStaffRow = (rowIndex) => {
   renderApp();
 };
 
-const createShiftVersion = () => {
-  if (!state.sheet) return;
+const createShiftVersion = async () => {
+  if (!state.sheet || state.loadingShift) return null;
+  state.loadingShift = true;
+  renderApp();
+  await new Promise((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
   state.sheet.generatedAt = new Date();
   const maxAttempts = 100;
   let bestResult = null;
@@ -1668,15 +1679,19 @@ const createShiftVersion = () => {
     state.assignments = bestResult.assignments;
     state.sheet.warnings = bestResult.warnings;
     state.blockedDays = bestResult.blocked;
-    renderApp();
   } else {
+    state.loadingShift = false;
+    renderApp();
     state.warningMessage = `シフト作成に失敗しました（${attempts}回試行）。不足日があるため作成できません。`;
     openDialog(".warning-dialog");
-    return;
+    return null;
   }
+  state.loadingShift = false;
+  renderApp();
   const versionLabel = `ver${state.shiftVersions.length + 1}`;
   state.shiftVersions = [...state.shiftVersions, versionLabel];
   openShiftVersionWindow(versionLabel);
+  return versionLabel;
 };
 
 const applyAssignments = ({ randomize, silent } = {}) => {
@@ -2378,7 +2393,7 @@ document.body.addEventListener("click", (event) => {
       state.pendingShift = false;
       if (!confirmed) return;
     }
-    createShiftVersion();
+    void createShiftVersion();
   }
 
   if (target.classList.contains("settings-button")) {
@@ -2438,7 +2453,7 @@ document.body.addEventListener("click", (event) => {
   if (target.dataset.action === "confirm-shift") {
     if (!state.sheet) return;
     state.pendingShift = false;
-    createShiftVersion();
+    void createShiftVersion();
     closeDialog(".confirm-dialog");
   }
 });
