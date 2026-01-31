@@ -146,6 +146,8 @@ const createEmptyStaff = () => ({
   nightMax: ""
 });
 
+const SHIFT_GENERATION_TRIES = 100;
+
 const state = {
   view: "login",
   owner: {
@@ -909,14 +911,7 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
 
 window.openShiftVersionWindow = openShiftVersionWindow;
 
-window.regenerateShiftVersion = () => {
-  if (!state.sheet) return null;
-  state.sheet.generatedAt = new Date();
-  applyAssignments({ randomize: true });
-  const versionLabel = `ver${state.shiftVersions.length + 1}`;
-  state.shiftVersions = [...state.shiftVersions, versionLabel];
-  return versionLabel;
-};
+window.regenerateShiftVersion = () => createShiftVersion();
 
 const renderSidePanel = () => `
   <aside class="side-panel">
@@ -1626,7 +1621,9 @@ const resetState = () => {
   renderApp();
 };
 
-const applyAssignments = ({ randomize } = {}) => {
+const cloneAssignments = (assignments) => assignments.map((row) => [...row]);
+
+const applyAssignments = ({ randomize, skipRender } = {}) => {
   if (!state.sheet) return;
   const warnings = [];
   const blocked = new Set();
@@ -1771,7 +1768,45 @@ const applyAssignments = ({ randomize } = {}) => {
 
   state.sheet.warnings = warnings;
   state.blockedDays = blocked;
+  if (!skipRender) {
+    renderApp();
+  }
+};
+
+const generateShiftAssignments = ({ tries = SHIFT_GENERATION_TRIES } = {}) => {
+  if (!state.sheet) return;
+  let bestAssignments = null;
+  let bestWarnings = [];
+  let bestBlockedDays = new Set();
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  for (let attempt = 0; attempt < tries; attempt += 1) {
+    applyAssignments({ randomize: true, skipRender: true });
+    const warningCount = state.sheet?.warnings?.length ?? 0;
+    if (warningCount < bestScore) {
+      bestScore = warningCount;
+      bestAssignments = cloneAssignments(state.assignments);
+      bestWarnings = [...(state.sheet.warnings ?? [])];
+      bestBlockedDays = new Set(state.blockedDays ?? []);
+      if (bestScore === 0) break;
+    }
+  }
+
+  if (bestAssignments) {
+    state.assignments = bestAssignments;
+    state.sheet.warnings = bestWarnings;
+    state.blockedDays = bestBlockedDays;
+  }
   renderApp();
+};
+
+const createShiftVersion = () => {
+  if (!state.sheet) return null;
+  state.sheet.generatedAt = new Date();
+  generateShiftAssignments();
+  const versionLabel = `ver${state.shiftVersions.length + 1}`;
+  state.shiftVersions = [...state.shiftVersions, versionLabel];
+  return versionLabel;
 };
 
 const openSettingsPanel = (rowIndex) => {
@@ -2087,10 +2122,8 @@ document.body.addEventListener("click", (event) => {
       openDialog(".confirm-dialog");
       return;
     }
-    state.sheet.generatedAt = new Date();
-    applyAssignments({ randomize: true });
-    const versionLabel = `ver${state.shiftVersions.length + 1}`;
-    state.shiftVersions = [...state.shiftVersions, versionLabel];
+    const versionLabel = createShiftVersion();
+    if (!versionLabel) return;
     openShiftVersionWindow(versionLabel);
   }
 
@@ -2151,10 +2184,8 @@ document.body.addEventListener("click", (event) => {
   if (target.dataset.action === "confirm-shift") {
     if (!state.sheet) return;
     state.pendingShift = false;
-    state.sheet.generatedAt = new Date();
-    applyAssignments({ randomize: true });
-    const versionLabel = `ver${state.shiftVersions.length + 1}`;
-    state.shiftVersions = [...state.shiftVersions, versionLabel];
+    const versionLabel = createShiftVersion();
+    if (!versionLabel) return;
     openShiftVersionWindow(versionLabel);
     closeDialog(".confirm-dialog");
   }
