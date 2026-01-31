@@ -1336,6 +1336,7 @@ const applyAssignments = ({ randomize } = {}) => {
   }));
 
   const parseLimit = (value) => {
+    if (value === "" || value === null || value === undefined) return null;
     const number = Number(value);
     return Number.isFinite(number) && number >= 0 ? number : null;
   };
