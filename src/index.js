@@ -1733,8 +1733,7 @@ const applyAssignments = ({ randomize } = {}) => {
   });
   state.assignments = state.staff.map(() => Array(state.sheet.days.length).fill(""));
 
-  state.sheet.days.forEach((day) => {
-    if (state.fixedDays.has(day.index)) return;
+  const buildAvailable = (day) => {
     const columnCells = cells.filter(
       (cell) => Number(cell.dataset.col) === day.index
     );
@@ -1760,65 +1759,80 @@ const applyAssignments = ({ randomize } = {}) => {
       availableNight.sort(() => Math.random() - 0.5);
     }
 
-    const assign = (cellsToUse, required, label, shift) => {
-      let count = 0;
-      const assignedNightWards = new Set();
-      const sortedCandidates = sortCandidates(cellsToUse, shift);
-      for (const entry of sortedCandidates) {
-        if (count >= required) break;
-        if (isOverMax(entry.rowIndex, shift)) continue;
-        if (shift === "night") {
-          const ward = state.staff[entry.rowIndex]?.ward;
-          if (ward && assignedNightWards.has(ward)) continue;
-          if (ward) assignedNightWards.add(ward);
-        }
-        const assignedLabel = entry.cell.querySelector(".assigned-shift");
-        if (assignedLabel && assignedLabel.textContent) continue;
-        assignedLabel.textContent = label;
-        entry.cell.classList.add("assigned");
-        const rowIndex = entry.rowIndex;
-        if (!Number.isNaN(rowIndex)) {
-          state.assignments[rowIndex][day.index] = label;
-        }
-        if (shift === "day") {
-          dayCounts[rowIndex] += 1;
-        } else {
-          nightCounts[rowIndex] += 1;
-        }
-        count += 1;
-      }
-      return count;
-    };
+    return { availableDay, availableNight };
+  };
 
-    const assignExtras = (cellsToUse, label, shift) => {
-      const assignedNightWards = new Set();
-      const sortedCandidates = sortCandidates(cellsToUse, shift);
-      for (const entry of sortedCandidates) {
-        if (isOverMax(entry.rowIndex, shift)) continue;
-        if (shift === "night") {
-          const ward = state.staff[entry.rowIndex]?.ward;
-          if (ward && assignedNightWards.has(ward)) continue;
-          if (ward) assignedNightWards.add(ward);
-        }
-        const assignedLabel = entry.cell.querySelector(".assigned-shift");
-        if (assignedLabel && assignedLabel.textContent) continue;
-        assignedLabel.textContent = label;
-        entry.cell.classList.add("assigned");
-        const rowIndex = entry.rowIndex;
-        if (!Number.isNaN(rowIndex)) {
-          state.assignments[rowIndex][day.index] = label;
-        }
-        if (shift === "day") {
-          dayCounts[rowIndex] += 1;
-        } else {
-          nightCounts[rowIndex] += 1;
-        }
+  const assign = (cellsToUse, required, label, shift) => {
+    let count = 0;
+    const assignedNightWards = new Set();
+    const sortedCandidates = sortCandidates(cellsToUse, shift);
+    for (const entry of sortedCandidates) {
+      if (count >= required) break;
+      if (isOverMax(entry.rowIndex, shift)) continue;
+      if (shift === "night") {
+        const ward = state.staff[entry.rowIndex]?.ward;
+        if (ward && assignedNightWards.has(ward)) continue;
+        if (ward) assignedNightWards.add(ward);
       }
-    };
+      const assignedLabel = entry.cell.querySelector(".assigned-shift");
+      if (assignedLabel && assignedLabel.textContent) continue;
+      assignedLabel.textContent = label;
+      entry.cell.classList.add("assigned");
+      const rowIndex = entry.rowIndex;
+      if (!Number.isNaN(rowIndex)) {
+        state.assignments[rowIndex][day.index] = label;
+      }
+      if (shift === "day") {
+        dayCounts[rowIndex] += 1;
+      } else {
+        nightCounts[rowIndex] += 1;
+      }
+      count += 1;
+    }
+    return count;
+  };
 
-    const dayCount = assign(availableDay, day.requiredDay, "○", "day");
+  const assignExtras = (cellsToUse, label, shift) => {
+    const assignedNightWards = new Set();
+    const sortedCandidates = sortCandidates(cellsToUse, shift);
+    for (const entry of sortedCandidates) {
+      if (isOverMax(entry.rowIndex, shift)) continue;
+      if (shift === "night") {
+        const ward = state.staff[entry.rowIndex]?.ward;
+        if (ward && assignedNightWards.has(ward)) continue;
+        if (ward) assignedNightWards.add(ward);
+      }
+      const assignedLabel = entry.cell.querySelector(".assigned-shift");
+      if (assignedLabel && assignedLabel.textContent) continue;
+      assignedLabel.textContent = label;
+      entry.cell.classList.add("assigned");
+      const rowIndex = entry.rowIndex;
+      if (!Number.isNaN(rowIndex)) {
+        state.assignments[rowIndex][day.index] = label;
+      }
+      if (shift === "day") {
+        dayCounts[rowIndex] += 1;
+      } else {
+        nightCounts[rowIndex] += 1;
+      }
+    }
+  };
+
+  const assignedNights = new Map();
+
+  state.sheet.days.forEach((day) => {
+    if (state.fixedDays.has(day.index)) return;
+    const { availableNight } = buildAvailable(day);
     const nightCount = assign(availableNight, day.requiredNight, "●", "night");
+    assignedNights.set(day.index, nightCount);
+  });
+
+  state.sheet.days.forEach((day) => {
+    if (state.fixedDays.has(day.index)) return;
+    const { availableDay } = buildAvailable(day);
+    const dayCount = assign(availableDay, day.requiredDay, "○", "day");
     assignExtras(availableDay, "○", "day");
+    const nightCount = assignedNights.get(day.index) ?? 0;
     if (dayCount < day.requiredDay || nightCount < day.requiredNight) {
       warnings.push(day.index);
       blocked.add(day.index);
