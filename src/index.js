@@ -160,6 +160,9 @@ const state = {
   confirmMessage: "",
   pendingShift: false,
   loadingShift: false,
+  lastShiftAttempts: null,
+  lastShiftAttemptLimit: null,
+  lastShiftSucceeded: null,
   selectedGroup: ""
 };
 
@@ -942,6 +945,13 @@ const renderSidePanel = () => `
             ? '<p class="loading-indicator" aria-live="polite">シフト作成中...</p>'
             : ""
         }
+        ${
+          state.lastShiftAttempts !== null && state.lastShiftAttemptLimit !== null
+            ? `<p class="helper-text">試行回数: ${state.lastShiftAttempts}/${state.lastShiftAttemptLimit} ${
+                state.lastShiftSucceeded ? "（成功）" : "（失敗）"
+              }</p>`
+            : ""
+        }
         <p class="helper-text">固定した日付は変更されません。</p>
       </section>
     `
@@ -1667,8 +1677,12 @@ const createShiftVersion = async () => {
   const maxAttempts = 100;
   let bestResult = null;
   let attempts = 0;
+  state.lastShiftAttemptLimit = maxAttempts;
+  state.lastShiftAttempts = 0;
+  state.lastShiftSucceeded = null;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     attempts += 1;
+    state.lastShiftAttempts = attempts;
     const result = applyAssignments({ randomize: true, silent: true });
     if (result.warnings.length === 0) {
       bestResult = result;
@@ -1676,11 +1690,13 @@ const createShiftVersion = async () => {
     }
   }
   if (bestResult) {
+    state.lastShiftSucceeded = true;
     state.assignments = bestResult.assignments;
     state.sheet.warnings = bestResult.warnings;
     state.blockedDays = bestResult.blocked;
   } else {
     state.loadingShift = false;
+    state.lastShiftSucceeded = false;
     renderApp();
     state.warningMessage = `シフト作成に失敗しました（${attempts}回試行）。不足日があるため作成できません。`;
     openDialog(".warning-dialog");
