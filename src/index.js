@@ -152,6 +152,7 @@ const state = {
     email: "",
     password: ""
   },
+  authToken: "",
   staff: structuredClone(initialStaff),
   ownerMode: true,
   sheet: null,
@@ -160,6 +161,7 @@ const state = {
   groupDraftName: "",
   currentSheetId: null,
   fixedDays: new Set(),
+  fixedCells: new Set(),
   blockedDays: new Set(),
   shiftPreferences: [],
   assignments: [],
@@ -263,6 +265,37 @@ const getShortageDays = () => {
 };
 
 const STORAGE_KEY = "shiftAppData";
+const AUTH_TOKEN_KEY = "shiftAuthToken";
+const API_BASE = window.SHIFT_API_BASE || "http://localhost:3001";
+
+const setAuthToken = (token) => {
+  state.authToken = token || "";
+  if (token) {
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
+};
+
+const apiRequest = async (path, options = {}) => {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {})
+  };
+  if (state.authToken) {
+    headers.Authorization = `Bearer ${state.authToken}`;
+  }
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers
+  });
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    const errorMessage = errorBody.error || "サーバーエラーが発生しました。";
+    throw new Error(errorMessage);
+  }
+  return response.json();
+};
 
 const loadPersistedState = () => {
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -274,33 +307,53 @@ const loadPersistedState = () => {
   };
 };
 
+const loadRemoteState = async () => {
+  if (!state.authToken) return null;
+  try {
+    return await apiRequest("/api/state");
+  } catch (error) {
+    state.warningMessage = "サーバーに接続できませんでした。ローカル保存で続行します。";
+    openDialog(".warning-dialog");
+    return null;
+  }
+};
+
 const persistState = () => {
   const payload = {
     groups: state.groups,
     sheets: state.sheets
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  if (state.authToken) {
+    apiRequest("/api/state", {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    }).catch(() => {
+      state.warningMessage = "サーバーへの保存に失敗しました。";
+      openDialog(".warning-dialog");
+    });
+  }
 };
 
 const persistedState = loadPersistedState();
-if (persistedState) {
-  state.groups = persistedState.groups;
-  state.sheets = persistedState.sheets;
+const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
+if (storedToken) {
+  state.authToken = storedToken;
 }
 
-const openShiftVersionWindow = (versionLabel) => {
+const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
   if (!state.sheet) return;
-  const newWindow = window.open("", "_blank");
+  const newWindow = targetWindow ?? window.open("", "_blank");
   if (!newWindow) return;
   newWindow.location.href = `about:blank#${versionLabel}`;
-  const fixedSet = new Set(state.fixedDays);
-  const baseFixedDays = new Set(state.fixedDays);
+  const fixedCells = new Set(state.fixedCells ?? []);
   const requiredDay = state.sheet.days.map((day) => day.requiredDay);
   const requiredNight = state.sheet.days.map((day) => day.requiredNight);
   const dayLabels = state.sheet.days.map((day) => `${day.dateLabel}(${day.weekday})`);
   const dayWeekdays = state.sheet.days.map((day) => day.weekday);
   const staffLimits = state.staff.map((person) => ({
     name: person.name,
+    shiftType: person.shiftType,
     dayMin: person.dayMin,
     dayMax: person.dayMax,
     nightMin: person.nightMin,
@@ -310,6 +363,7 @@ const openShiftVersionWindow = (versionLabel) => {
     availabilityType: person.availabilityType,
     availableWeekdays: person.availableWeekdays
   }));
+  const shiftPreferences = state.shiftPreferences;
   const sheetId = state.currentSheetId;
   const rows = state.staff
     .map((person, rowIndex) => {
@@ -320,13 +374,16 @@ const openShiftVersionWindow = (versionLabel) => {
           const label = off ? "休" : assignment;
           return `
             <td data-row="${rowIndex}" data-col="${day.index}" style="border:1px solid #d1d5db;padding:6px;text-align:center;">
-              <select data-action="edit-cell" ${fixedSet.has(day.index) ? "disabled" : ""}>
+              <div style="display:flex;flex-direction:column;gap:4px;align-items:center;">
+                <button class="cell-fix-toggle" data-row="${rowIndex}" data-col="${day.index}">固定</button>
+                <select data-action="edit-cell">
                 <option value="" ${label === "" ? "selected" : ""}></option>
                 <option value="○" ${label === "○" ? "selected" : ""}>○</option>
                 <option value="●" ${label === "●" ? "selected" : ""}>●</option>
                 <option value="※" ${label === "※" ? "selected" : ""}>※</option>
-                <option value="休" ${label === "休" ? "selected" : ""}>休</option>
-              </select>
+                <option value="休" ${label === "休" ? "selected" : ""}>休み</option>
+                </select>
+              </div>
             </td>
           `;
         })
@@ -351,7 +408,7 @@ const openShiftVersionWindow = (versionLabel) => {
                 <div class="weekday">${day.weekday}</div>
                 <div class="required-counts">日:${day.requiredDay} 夜:${day.requiredNight}</div>
               </div>
-              <button class="fix-toggle" data-col="${day.index}">固定</button>
+              
             </div>
           </th>
         `;
@@ -367,20 +424,20 @@ const openShiftVersionWindow = (versionLabel) => {
           table { border-collapse: collapse; width: 100%; }
           th { background: #f8fafc; }
           th.shortage-col, td.shortage-col { background: #fee2e2; }
-          th.fixed-col, td.fixed-col { background: #fef08a; }
+          td.fixed-cell { background: #fef08a; }
           .header-cell { display: flex; flex-direction: column; gap: 6px; }
           .header-cell .weekday { font-size: 12px; color: #64748b; }
           .header-cell .required-counts { font-size: 11px; color: #475569; }
-          .fix-toggle {
+          .cell-fix-toggle {
             border: 1px solid #cbd5f5;
             background: #fff;
             border-radius: 999px;
             font-size: 12px;
-            padding: 2px 8px;
+            padding: 2px 6px;
             cursor: pointer;
           }
-          .fix-toggle.active { background: #f59e0b; color: #1f2937; border-color: #f59e0b; }
-          .fix-toggle[disabled] { opacity: 0.6; cursor: not-allowed; }
+          .cell-fix-toggle.active { background: #f59e0b; color: #1f2937; border-color: #f59e0b; }
+          .cell-fix-toggle[disabled] { opacity: 0.6; cursor: not-allowed; }
           .legend { display: flex; gap: 12px; margin: 12px 0; font-size: 12px; }
           .legend-item { display: flex; align-items: center; gap: 6px; }
           .legend-swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid #e2e8f0; }
@@ -435,7 +492,7 @@ const openShiftVersionWindow = (versionLabel) => {
         <h1>シフト結果 ${versionLabel}</h1>
         <p>${state.sheet.year}年${state.sheet.month}月</p>
         <div class="legend">
-          <div class="legend-item"><span class="legend-swatch legend-fixed"></span>黄: これ以上動かせない</div>
+          <div class="legend-item"><span class="legend-swatch legend-fixed"></span>黄: このスタッフは固定</div>
           <div class="legend-item"><span class="legend-swatch legend-shortage"></span>赤: これじゃ人が足りない</div>
         </div>
         <div class="shift-result-actions">
@@ -475,43 +532,47 @@ const openShiftVersionWindow = (versionLabel) => {
           const dayWeekdays = ${JSON.stringify(dayWeekdays)};
           const staffLimits = ${JSON.stringify(staffLimits)};
           const staffAvailability = ${JSON.stringify(staffAvailability)};
-          const fixedDays = new Set(${JSON.stringify(Array.from(fixedSet))});
-          const baseFixedDays = new Set(${JSON.stringify(Array.from(baseFixedDays))});
+          const shiftPreferences = ${JSON.stringify(shiftPreferences)};
+          const fixedCells = new Set(${JSON.stringify(Array.from(fixedCells))});
           const sheetId = ${JSON.stringify(sheetId)};
           let currentWarnings = [];
 
           const getNumeric = (value) => {
+            if (value === null || value === undefined) return null;
+            if (typeof value === 'string' && value.trim() === '') return null;
             const number = Number(value);
             return Number.isFinite(number) && number >= 0 ? number : null;
           };
 
-          const updateColumnClasses = (index, { fixed, shortage }) => {
+          const updateColumnClasses = (index, { shortage }) => {
             const header = document.querySelector(\`thead th[data-col="\${index}"]\`);
             const cells = document.querySelectorAll(\`tbody td[data-col="\${index}"]\`);
             const applyClasses = (el) => {
               if (!el) return;
-              el.classList.remove('fixed-col', 'shortage-col');
-              if (fixed) {
-                el.classList.add('fixed-col');
-                return;
-              }
+              el.classList.remove('shortage-col');
               if (shortage) el.classList.add('shortage-col');
             };
             applyClasses(header);
             cells.forEach((cell) => applyClasses(cell));
           };
 
-          const updateFixedButtonState = (index) => {
-            const button = document.querySelector(\`.fix-toggle[data-col="\${index}"]\`);
-            if (!button) return;
-            const isFixed = fixedDays.has(index);
-            button.classList.toggle('active', isFixed);
-            button.textContent = isFixed ? '固定中' : '固定';
-            button.disabled = baseFixedDays.has(index);
-            const cells = document.querySelectorAll(\`tbody td[data-col="\${index}"] select[data-action="edit-cell"]\`);
-            cells.forEach((select) => {
+          const cellKey = (rowIndex, colIndex) => \`\${rowIndex}-\${colIndex}\`;
+
+          const updateCellFixedState = (rowIndex, colIndex) => {
+            const key = cellKey(rowIndex, colIndex);
+            const cell = document.querySelector(\`td[data-row="\${rowIndex}"][data-col="\${colIndex}"]\`);
+            if (!cell) return;
+            const button = cell.querySelector('.cell-fix-toggle');
+            const select = cell.querySelector('select[data-action="edit-cell"]');
+            const isFixed = fixedCells.has(key);
+            if (button) {
+              button.classList.toggle('active', isFixed);
+              button.textContent = isFixed ? '固定中' : '固定';
+            }
+            if (select) {
               select.disabled = isFixed;
-            });
+            }
+            cell.classList.toggle('fixed-cell', isFixed);
           };
 
           const updateRowSummary = (row) => {
@@ -551,22 +612,130 @@ const openShiftVersionWindow = (versionLabel) => {
             return { dayCounts, nightCounts, rowCounts };
           };
 
+          const applyNightNextDay = (target) => {
+            if (target.value !== "●") return;
+            const cell = target.closest('td');
+            if (!cell) return;
+            const row = target.closest('tr');
+            if (!row) return;
+            const colIndex = Number(cell.dataset.col);
+            const nextCell = row.querySelector(\`td[data-col="\${colIndex + 1}"] select[data-action="edit-cell"]\`);
+            if (!nextCell || nextCell.disabled) return;
+            nextCell.value = "※";
+          };
+
+          const isStaffAvailableForDay = (rowIndex, colIndex) => {
+            const availability = staffAvailability[rowIndex];
+            if (!availability) return true;
+            const weekday = dayWeekdays[colIndex];
+            if (availability.availabilityType === "weekday") {
+              return weekday !== "土" && weekday !== "日";
+            }
+            if (availability.availabilityType === "specific") {
+              return (
+                Array.isArray(availability.availableWeekdays) &&
+                availability.availableWeekdays.includes(weekday)
+              );
+            }
+            return true;
+          };
+
+          const isShiftTypeAllowed = (rowIndex, shift) => {
+            const type = staffLimits[rowIndex]?.shiftType;
+            if (shift === "day") return type !== "夜専";
+            if (shift === "night") return type !== "昼専";
+            return true;
+          };
+
+          const getCellValue = (rowIndex, colIndex) => {
+            const select = document.querySelector(
+              'tbody td[data-row="' +
+                rowIndex +
+                '"][data-col="' +
+                colIndex +
+                '"] select[data-action="edit-cell"]'
+            );
+            return select?.value ?? "";
+          };
+
+          const buildShortageReasons = (colIndex, rowCounts) => {
+            const reasons = {
+              day: {
+                available: 0,
+                off: 0,
+                unavailable: 0,
+                assigned: 0,
+                shiftType: 0,
+                maxed: 0
+              },
+              night: {
+                available: 0,
+                off: 0,
+                unavailable: 0,
+                assigned: 0,
+                shiftType: 0,
+                maxed: 0
+              }
+            };
+            staffAvailability.forEach((_, rowIndex) => {
+              const cellValue = getCellValue(rowIndex, colIndex);
+              const isOff = shiftPreferences?.[rowIndex]?.[colIndex] === "off";
+              if (isOff || cellValue === "休") {
+                reasons.day.off += 1;
+                reasons.night.off += 1;
+                return;
+              }
+              if (cellValue === "○" || cellValue === "●" || cellValue === "※") {
+                reasons.day.assigned += 1;
+                reasons.night.assigned += 1;
+                return;
+              }
+              if (!isStaffAvailableForDay(rowIndex, colIndex)) {
+                reasons.day.unavailable += 1;
+                reasons.night.unavailable += 1;
+                return;
+              }
+              const counts = rowCounts[rowIndex] || { dayCount: 0, nightCount: 0 };
+              const dayMax = getNumeric(staffLimits[rowIndex]?.dayMax);
+              const nightMax = getNumeric(staffLimits[rowIndex]?.nightMax);
+
+              if (!isShiftTypeAllowed(rowIndex, "day")) {
+                reasons.day.shiftType += 1;
+              } else if (dayMax !== null && counts.dayCount >= dayMax) {
+                reasons.day.maxed += 1;
+              } else {
+                reasons.day.available += 1;
+              }
+
+              if (!isShiftTypeAllowed(rowIndex, "night")) {
+                reasons.night.shiftType += 1;
+              } else if (nightMax !== null && counts.nightCount >= nightMax) {
+                reasons.night.maxed += 1;
+              } else {
+                reasons.night.available += 1;
+              }
+            });
+            return reasons;
+          };
+
           const updateWarnings = () => {
             const { dayCounts, nightCounts, rowCounts } = collectCounts();
             const warnings = [];
             requiredDay.forEach((required, index) => {
-              if (baseFixedDays.has(index)) {
-                fixedDays.add(index);
-              }
               const shortage =
-                !fixedDays.has(index) &&
                 (dayCounts[index] < required || nightCounts[index] < requiredNight[index]);
               updateColumnClasses(index, {
-                fixed: fixedDays.has(index),
                 shortage
               });
               if (shortage) {
+                const reasons = buildShortageReasons(index, rowCounts);
                 warnings.push(\`\${dayLabels[index]}: 日勤 \${dayCounts[index]}/\${required}, 夜勤 \${nightCounts[index]}/\${requiredNight[index]} が不足\`);
+                warnings.push(
+                  \`理由(日勤): 勤務可能\${reasons.day.available}名 / 休み希望\${reasons.day.off}名 / 曜日不可\${reasons.day.unavailable}名 / 当日割当済み\${reasons.day.assigned}名 / 勤務タイプ不可\${reasons.day.shiftType}名 / 上限到達\${reasons.day.maxed}名\`
+                );
+                warnings.push(
+                  \`理由(夜勤): 勤務可能\${reasons.night.available}名 / 休み希望\${reasons.night.off}名 / 曜日不可\${reasons.night.unavailable}名 / 当日割当済み\${reasons.night.assigned}名 / 勤務タイプ不可\${reasons.night.shiftType}名 / 上限到達\${reasons.night.maxed}名\`
+                );
               }
             });
             staffLimits.forEach((limit, index) => {
@@ -595,34 +764,6 @@ const openShiftVersionWindow = (versionLabel) => {
                 : '<li>現在、エラーはありません。</li>';
             }
             currentWarnings = warnings;
-          };
-
-          const applyNightNextDay = (target) => {
-            if (target.value !== "●") return;
-            const cell = target.closest('td');
-            if (!cell) return;
-            const row = target.closest('tr');
-            if (!row) return;
-            const colIndex = Number(cell.dataset.col);
-            const nextCell = row.querySelector(\`td[data-col="\${colIndex + 1}"] select[data-action="edit-cell"]\`);
-            if (!nextCell || nextCell.disabled) return;
-            nextCell.value = "※";
-          };
-
-          const isStaffAvailableForDay = (rowIndex, colIndex) => {
-            const availability = staffAvailability[rowIndex];
-            if (!availability) return true;
-            const weekday = dayWeekdays[colIndex];
-            if (availability.availabilityType === "weekday") {
-              return weekday !== "土" && weekday !== "日";
-            }
-            if (availability.availabilityType === "specific") {
-              return (
-                Array.isArray(availability.availableWeekdays) &&
-                availability.availableWeekdays.includes(weekday)
-              );
-            }
-            return true;
           };
 
           const enforceNightRests = () => {
@@ -670,10 +811,14 @@ const openShiftVersionWindow = (versionLabel) => {
               opener.saveShiftResult({
                 sheetId,
                 assignments,
-                fixedDays: Array.from(fixedDays),
+                fixedCells: Array.from(fixedCells),
                 requiredDay,
                 requiredNight
               });
+              if (typeof opener.notifyShiftSaved === 'function') {
+                opener.notifyShiftSaved();
+              }
+              window.close();
               return;
             }
             if (target.matches('#print-shift')) {
@@ -698,26 +843,33 @@ const openShiftVersionWindow = (versionLabel) => {
             }
             if (target.matches('#regenerate-shift')) {
               const opener = window.opener;
-              if (!opener) return;
-              const actionButton = opener.document.getElementById('auto-shift');
-              if (actionButton) actionButton.click();
+              if (!opener || typeof opener.regenerateShiftVersion !== 'function') return;
+              const versionLabel = opener.regenerateShiftVersion();
+              if (!versionLabel) return;
+              const nextWindow = window.open('', '_blank');
+              if (!nextWindow || typeof opener.openShiftVersionWindow !== 'function') return;
+              opener.openShiftVersionWindow(versionLabel, nextWindow);
               return;
             }
-            if (!target.matches('.fix-toggle')) return;
-            const index = Number(target.dataset.col);
-            if (Number.isNaN(index)) return;
-            if (baseFixedDays.has(index)) return;
-            if (fixedDays.has(index)) {
-              fixedDays.delete(index);
-            } else {
-              fixedDays.add(index);
+            if (target.matches('.cell-fix-toggle')) {
+              const rowIndex = Number(target.dataset.row);
+              const colIndex = Number(target.dataset.col);
+              if (Number.isNaN(rowIndex) || Number.isNaN(colIndex)) return;
+              const key = cellKey(rowIndex, colIndex);
+              if (fixedCells.has(key)) {
+                fixedCells.delete(key);
+              } else {
+                fixedCells.add(key);
+              }
+              updateCellFixedState(rowIndex, colIndex);
+              updateWarnings();
             }
-            updateFixedButtonState(index);
-            updateWarnings();
           });
 
-          requiredDay.forEach((_, index) => {
-            updateFixedButtonState(index);
+          requiredDay.forEach((_, colIndex) => {
+            staffLimits.forEach((_, rowIndex) => {
+              updateCellFixedState(rowIndex, colIndex);
+            });
           });
           enforceNightRests();
           updateWarnings();
@@ -726,6 +878,17 @@ const openShiftVersionWindow = (versionLabel) => {
     </html>
   `);
   newWindow.document.close();
+};
+
+window.openShiftVersionWindow = openShiftVersionWindow;
+
+window.regenerateShiftVersion = () => {
+  if (!state.sheet) return null;
+  state.sheet.generatedAt = new Date();
+  applyAssignments({ randomize: true });
+  const versionLabel = `ver${state.shiftVersions.length + 1}`;
+  state.shiftVersions = [...state.shiftVersions, versionLabel];
+  return versionLabel;
 };
 
 const renderSidePanel = () => `
@@ -769,7 +932,41 @@ const renderLogin = () => `
       </label>
       <div class="button-row">
         <button class="primary" id="login-owner">ログイン</button>
+        <button class="ghost" id="go-register">新規登録</button>
       </div>
+      <p class="helper-text">別端末でも使うにはサーバー接続が必要です。</p>
+    </section>
+  </div>
+`;
+
+const renderRegister = () => `
+  <div class="page login">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">バイトシフト調整</p>
+        <h1>新規登録</h1>
+      </div>
+      <div class="header-actions">
+        <button class="ghost" id="back-to-login">ログインへ戻る</button>
+      </div>
+    </header>
+    <section class="card">
+      <label>
+        メールアドレス
+        <input id="owner-email" type="email" placeholder="owner@example.com" value="${
+          state.owner.email
+        }" />
+      </label>
+      <label>
+        パスワード
+        <input id="owner-password" type="password" placeholder="8文字以上" value="${
+          state.owner.password
+        }" />
+      </label>
+      <div class="button-row">
+        <button class="primary" id="register-owner">登録する</button>
+      </div>
+      <p class="helper-text">登録後、そのままログインして同期を開始します。</p>
     </section>
   </div>
 `;
@@ -807,7 +1004,7 @@ const renderStaffRows = () => {
                         <button class="rest-button ${preference ? "active" : ""}" ${
                           state.ownerMode ? "" : "disabled"
                         } aria-pressed="${preference ? "true" : "false"}">休み</button>
-                        <div class="assigned-shift" aria-live="polite">${assigned}</div>
+                        <div class="assigned-shift" aria-live="polite"></div>
                       </div>
                     </td>
                   `;
@@ -953,6 +1150,9 @@ const renderGroupList = () => `
                         <button class="ghost" data-action="open-sheet" data-id="${
                           sheet.id
                         }">開く</button>
+                        <button class="ghost" data-action="reset-sheet" data-id="${
+                          sheet.id
+                        }">リセット</button>
                       </div>
                     </div>
                   `
@@ -1216,6 +1416,8 @@ const renderApp = () => {
   let content = "";
   if (state.view === "login") {
     content = renderLogin();
+  } else if (state.view === "register") {
+    content = renderRegister();
   } else if (state.view === "group") {
     content = renderGroupCreation();
   } else if (state.view === "dashboard") {
@@ -1248,7 +1450,7 @@ const renderAppPreserveScroll = () => {
   window.scrollTo(windowScrollX, windowScrollY);
 };
 
-window.saveShiftResult = ({ sheetId, assignments, fixedDays, requiredDay, requiredNight }) => {
+window.saveShiftResult = ({ sheetId, assignments, fixedCells, requiredDay, requiredNight }) => {
   if (!sheetId) return;
   const sheetIndex = state.sheets.findIndex((item) => item.id === sheetId);
   if (sheetIndex === -1) return;
@@ -1256,7 +1458,7 @@ window.saveShiftResult = ({ sheetId, assignments, fixedDays, requiredDay, requir
   const updatedSheet = {
     ...sheet,
     savedAssignments: assignments,
-    savedFixedDays: fixedDays,
+    savedFixedCells: fixedCells,
     savedRequiredDay: requiredDay,
     savedRequiredNight: requiredNight,
     generatedAt: new Date()
@@ -1268,7 +1470,7 @@ window.saveShiftResult = ({ sheetId, assignments, fixedDays, requiredDay, requir
   ];
   if (state.currentSheetId === sheetId && state.sheet) {
     state.assignments = assignments;
-    state.fixedDays = new Set(fixedDays);
+    state.fixedCells = new Set(fixedCells ?? []);
     state.sheet.days.forEach((day, index) => {
       if (Array.isArray(requiredDay) && requiredDay[index] !== undefined) {
         day.requiredDay = requiredDay[index];
@@ -1278,6 +1480,46 @@ window.saveShiftResult = ({ sheetId, assignments, fixedDays, requiredDay, requir
       }
     });
     state.sheet.generatedAt = updatedSheet.generatedAt;
+  }
+  persistState();
+  renderApp();
+};
+
+window.notifyShiftSaved = () => {
+  state.warningMessage = "保存が完了しました。シフト表に戻ります。";
+  state.view = "sheet";
+  renderApp();
+  const dialog = document.querySelector(".warning-dialog");
+  if (dialog instanceof HTMLDialogElement) {
+    dialog.showModal();
+  }
+};
+
+const resetSavedSheet = (sheetId) => {
+  if (!sheetId) return;
+  const sheetIndex = state.sheets.findIndex((item) => item.id === sheetId);
+  if (sheetIndex === -1) return;
+  const sheet = state.sheets[sheetIndex];
+  const updatedSheet = {
+    ...sheet,
+    savedAssignments: [],
+    savedFixedCells: [],
+    generatedAt: null
+  };
+  state.sheets = [
+    ...state.sheets.slice(0, sheetIndex),
+    updatedSheet,
+    ...state.sheets.slice(sheetIndex + 1)
+  ];
+  if (state.currentSheetId === sheetId && state.sheet) {
+    state.assignments = state.staff.map(() =>
+      Array(state.sheet.days.length).fill("")
+    );
+    state.fixedCells = new Set();
+    state.fixedDays = new Set();
+    state.blockedDays = new Set();
+    state.sheet.warnings = [];
+    state.sheet.generatedAt = null;
   }
   persistState();
   renderApp();
@@ -1309,6 +1551,7 @@ const resetState = () => {
   state.groupDraftName = "";
   state.currentSheetId = null;
   state.fixedDays = new Set();
+  state.fixedCells = new Set();
   state.blockedDays = new Set();
   state.shiftPreferences = [];
   state.assignments = [];
@@ -1504,6 +1747,58 @@ const validateOwnerFields = () => {
   return email && password;
 };
 
+const syncOwnerState = async () => {
+  const remote = await loadRemoteState();
+  if (remote) {
+    state.groups = remote.groups;
+    state.sheets = remote.sheets;
+    return true;
+  }
+  if (persistedState) {
+    state.groups = persistedState.groups;
+    state.sheets = persistedState.sheets;
+  }
+  return false;
+};
+
+const loginOwner = async ({ email, password }) => {
+  try {
+    const response = await apiRequest("/api/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password })
+    });
+    setAuthToken(response.token);
+    state.owner.email = response.email;
+    state.owner.password = "";
+    await syncOwnerState();
+    startOwnerSession();
+  } catch (error) {
+    state.warningMessage = error.message || "ログインに失敗しました。";
+    openDialog(".warning-dialog");
+  }
+};
+
+const registerOwner = async ({ email, password }) => {
+  try {
+    await apiRequest("/api/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password })
+    });
+    await loginOwner({ email, password });
+  } catch (error) {
+    state.warningMessage = error.message || "登録に失敗しました。";
+    openDialog(".warning-dialog");
+  }
+};
+
+const logoutOwner = async () => {
+  if (state.authToken) {
+    apiRequest("/api/logout", { method: "POST" }).catch(() => {});
+  }
+  setAuthToken("");
+  resetState();
+};
+
 const openSheetFromList = (sheetId) => {
   const sheet = state.sheets.find((item) => item.id === sheetId);
   if (!sheet) return;
@@ -1545,37 +1840,76 @@ const openSheetFromList = (sheetId) => {
       Array(state.sheet.days.length).fill("")
     );
   }
-  if (Array.isArray(sheet.savedFixedDays)) {
-    state.fixedDays = new Set(sheet.savedFixedDays);
+  if (Array.isArray(sheet.savedFixedCells)) {
+    state.fixedCells = new Set(sheet.savedFixedCells);
+  } else {
+    state.fixedCells = new Set();
   }
+  state.fixedDays = new Set();
   state.blockedDays = new Set();
   state.view = "sheet";
   renderApp();
 };
 
-renderApp();
+const initApp = async () => {
+  if (state.authToken) {
+    try {
+      const profile = await apiRequest("/api/me");
+      state.owner.email = profile.email;
+      await syncOwnerState();
+      state.view = "dashboard";
+    } catch (error) {
+      setAuthToken("");
+      if (persistedState) {
+        state.groups = persistedState.groups;
+        state.sheets = persistedState.sheets;
+      }
+    }
+  } else if (persistedState) {
+    state.groups = persistedState.groups;
+    state.sheets = persistedState.sheets;
+  }
+  renderApp();
+};
+
+void initApp();
 
 document.body.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
 
-  if (target.id === "login-owner") {
+  if (target.id === "go-register") {
+    state.view = "register";
+    renderApp();
+    return;
+  }
+
+  if (target.id === "back-to-login") {
+    state.view = "login";
+    renderApp();
+    return;
+  }
+
+  if (target.id === "login-owner" || target.id === "register-owner") {
     const emailInput = document.getElementById("owner-email");
     const passwordInput = document.getElementById("owner-password");
     if (
       emailInput instanceof HTMLInputElement &&
       passwordInput instanceof HTMLInputElement
     ) {
-      state.owner = {
-        email: emailInput.value.trim(),
-        password: passwordInput.value.trim()
-      };
+      const email = emailInput.value.trim();
+      const password = passwordInput.value.trim();
+      state.owner = { email, password };
       if (!validateOwnerFields()) {
         state.warningMessage = "メールアドレスとパスワードを入力してください。";
         openDialog(".warning-dialog");
         return;
       }
-      startOwnerSession();
+      if (target.id === "register-owner") {
+        void registerOwner({ email, password });
+      } else {
+        void loginOwner({ email, password });
+      }
     }
   }
 
@@ -1686,12 +2020,20 @@ document.body.addEventListener("click", (event) => {
   }
 
   if (target.id === "logout") {
-    resetState();
+    void logoutOwner();
   }
 
   if (target.dataset.action === "open-sheet") {
     const sheetId = target.dataset.id;
     openSheetFromList(sheetId);
+  }
+
+  if (target.dataset.action === "reset-sheet") {
+    const sheetId = target.dataset.id;
+    if (!sheetId) return;
+    const confirmed = window.confirm("このシフトをリセットして空にしますか？");
+    if (!confirmed) return;
+    resetSavedSheet(sheetId);
   }
 
   if (target.dataset.action === "close") {
@@ -1819,7 +2161,7 @@ document.body.addEventListener("submit", (event) => {
         groupName: state.selectedGroup,
         generatedAt: new Date(),
         savedAssignments: [],
-        savedFixedDays: [],
+        savedFixedCells: [],
         savedRequiredDay: [],
         savedRequiredNight: []
       };
