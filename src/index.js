@@ -153,6 +153,7 @@ const state = {
     password: ""
   },
   authToken: "",
+  apiStatus: "unknown",
   staff: structuredClone(initialStaff),
   ownerMode: true,
   sheet: null,
@@ -296,6 +297,32 @@ const apiRequest = async (path, options = {}) => {
   }
   return response.json();
 };
+
+const checkApiHealth = async () => {
+  try {
+    const response = await fetch(`${API_BASE}/api/health`);
+    state.apiStatus = response.ok ? "online" : "error";
+  } catch (error) {
+    state.apiStatus = "offline";
+  }
+};
+
+const getApiStatusLabel = () => {
+  if (state.apiStatus === "online") return "サーバー接続: OK";
+  if (state.apiStatus === "offline") return "サーバー接続: 未接続";
+  if (state.apiStatus === "error") return "サーバー接続: エラー";
+  return "サーバー接続: 確認中";
+};
+
+const getApiStatusClass = () => {
+  if (state.apiStatus === "online") return "status-pill ok";
+  if (state.apiStatus === "offline") return "status-pill offline";
+  if (state.apiStatus === "error") return "status-pill error";
+  return "status-pill";
+};
+
+const getConnectionHelpMessage = () =>
+  "サーバーに接続できませんでした。公開サイトではAPIサーバーが必要です。npm run server を実行するか、SHIFT_API_BASE を正しいURLに設定してください。";
 
 const loadPersistedState = () => {
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -916,6 +943,7 @@ const renderLogin = () => `
         <p class="eyebrow">バイトシフト調整</p>
         <h1>ログイン</h1>
       </div>
+      <span class="${getApiStatusClass()}">${getApiStatusLabel()}</span>
     </header>
     <section class="card">
       <label>
@@ -938,6 +966,9 @@ const renderLogin = () => `
       <p class="helper-text">
         ログインできない場合は公開モードで閲覧できます（編集はできません）。
       </p>
+      <p class="helper-text">
+        ${state.apiStatus === "offline" ? getConnectionHelpMessage() : ""}
+      </p>
       <p class="helper-text">別端末でも使うにはサーバー接続が必要です。</p>
     </section>
   </div>
@@ -951,6 +982,7 @@ const renderRegister = () => `
         <h1>新規登録</h1>
       </div>
       <div class="header-actions">
+        <span class="${getApiStatusClass()}">${getApiStatusLabel()}</span>
         <button class="ghost" id="back-to-login">ログインへ戻る</button>
       </div>
     </header>
@@ -970,6 +1002,9 @@ const renderRegister = () => `
       <div class="button-row">
         <button class="primary" id="register-owner">登録する</button>
       </div>
+      <p class="helper-text">
+        ${state.apiStatus === "offline" ? getConnectionHelpMessage() : ""}
+      </p>
       <p class="helper-text">登録後、そのままログインして同期を開始します。</p>
     </section>
   </div>
@@ -1803,6 +1838,11 @@ const syncOwnerState = async () => {
 };
 
 const loginOwner = async ({ email, password }) => {
+  if (state.apiStatus === "offline") {
+    state.warningMessage = getConnectionHelpMessage();
+    openDialog(".warning-dialog");
+    return;
+  }
   try {
     const response = await apiRequest("/api/login", {
       method: "POST",
@@ -1814,12 +1854,20 @@ const loginOwner = async ({ email, password }) => {
     await syncOwnerState();
     startOwnerSession();
   } catch (error) {
-    state.warningMessage = error.message || "ログインに失敗しました。";
+    state.warningMessage =
+      error instanceof TypeError
+        ? getConnectionHelpMessage()
+        : error.message || "ログインに失敗しました。";
     openDialog(".warning-dialog");
   }
 };
 
 const registerOwner = async ({ email, password }) => {
+  if (state.apiStatus === "offline") {
+    state.warningMessage = getConnectionHelpMessage();
+    openDialog(".warning-dialog");
+    return;
+  }
   try {
     await apiRequest("/api/register", {
       method: "POST",
@@ -1827,7 +1875,10 @@ const registerOwner = async ({ email, password }) => {
     });
     await loginOwner({ email, password });
   } catch (error) {
-    state.warningMessage = error.message || "登録に失敗しました。";
+    state.warningMessage =
+      error instanceof TypeError
+        ? getConnectionHelpMessage()
+        : error.message || "登録に失敗しました。";
     openDialog(".warning-dialog");
   }
 };
@@ -1893,6 +1944,7 @@ const openSheetFromList = (sheetId) => {
 };
 
 const initApp = async () => {
+  await checkApiHealth();
   if (state.authToken) {
     try {
       const profile = await apiRequest("/api/me");

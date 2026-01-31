@@ -46,6 +46,30 @@ body {
   border-radius: 999px;
 }
 
+.status-pill {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  background: #e2e8f0;
+  padding: 6px 12px;
+  border-radius: 999px;
+}
+
+.status-pill.ok {
+  color: #0f766e;
+  background: #ccfbf1;
+}
+
+.status-pill.offline {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.status-pill.error {
+  color: #b45309;
+  background: #fef3c7;
+}
+
 .app-header h1 {
   margin: 4px 0 0;
   font-size: 28px;
