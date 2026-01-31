@@ -1656,11 +1656,10 @@ const deleteStaffRow = (rowIndex) => {
   renderApp();
 };
 
-const createShiftVersion = ({ batch = 0 } = {}) => {
+const createShiftVersion = () => {
   if (!state.sheet) return;
   state.sheet.generatedAt = new Date();
   const maxAttempts = 100;
-  const maxBatches = 3;
   let bestResult = null;
   let attempts = 0;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -1677,13 +1676,7 @@ const createShiftVersion = ({ batch = 0 } = {}) => {
     state.blockedDays = bestResult.blocked;
     renderApp();
   } else {
-    if (batch + 1 < maxBatches) {
-      setTimeout(() => {
-        createShiftVersion({ batch: batch + 1 });
-      }, 0);
-      return;
-    }
-    state.warningMessage = `シフト作成に失敗しました（${attempts * maxBatches}回試行）。不足日があるため作成できません。`;
+    state.warningMessage = `シフト作成に失敗しました（${attempts}回試行）。不足日があるため作成できません。`;
     openDialog(".warning-dialog");
     return;
   }
