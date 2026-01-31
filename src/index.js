@@ -900,11 +900,8 @@ window.openShiftVersionWindow = openShiftVersionWindow;
 
 window.regenerateShiftVersion = () => {
   if (!state.sheet) return null;
-  state.sheet.generatedAt = new Date();
-  applyAssignments({ randomize: true });
-  const versionLabel = `ver${state.shiftVersions.length + 1}`;
-  state.shiftVersions = [...state.shiftVersions, versionLabel];
-  return versionLabel;
+  createShiftVersion();
+  return state.shiftVersions[state.shiftVersions.length - 1] ?? null;
 };
 
 const renderSidePanel = () => `
@@ -1595,7 +1592,9 @@ const openDialog = (selector) => {
   const dialog = document.querySelector(selector);
   if (dialog instanceof HTMLDialogElement) {
     dialog.showModal();
+    return true;
   }
+  return false;
 };
 
 const closeDialog = (selector) => {
@@ -1649,6 +1648,15 @@ const deleteStaffRow = (rowIndex) => {
   }
   state.staff = state.staff.filter((_, index) => index !== rowIndex);
   renderApp();
+};
+
+const createShiftVersion = () => {
+  if (!state.sheet) return;
+  state.sheet.generatedAt = new Date();
+  applyAssignments({ randomize: true });
+  const versionLabel = `ver${state.shiftVersions.length + 1}`;
+  state.shiftVersions = [...state.shiftVersions, versionLabel];
+  openShiftVersionWindow(versionLabel);
 };
 
 const applyAssignments = ({ randomize } = {}) => {
@@ -2294,16 +2302,16 @@ document.body.addEventListener("click", (event) => {
         .map((index) => state.sheet.days[index]?.dateLabel)
         .filter(Boolean)
         .join("、");
-      state.confirmMessage = `${labels} はメンバーが足りませんがそのまま作成しますか？`;
+      const message = `${labels} はメンバーが足りませんがそのまま作成しますか？`;
+      state.confirmMessage = message;
       state.pendingShift = true;
-      openDialog(".confirm-dialog");
-      return;
+      const opened = openDialog(".confirm-dialog");
+      if (opened) return;
+      const confirmed = window.confirm(message);
+      state.pendingShift = false;
+      if (!confirmed) return;
     }
-    state.sheet.generatedAt = new Date();
-    applyAssignments({ randomize: true });
-    const versionLabel = `ver${state.shiftVersions.length + 1}`;
-    state.shiftVersions = [...state.shiftVersions, versionLabel];
-    openShiftVersionWindow(versionLabel);
+    createShiftVersion();
   }
 
   if (target.classList.contains("settings-button")) {
@@ -2363,11 +2371,7 @@ document.body.addEventListener("click", (event) => {
   if (target.dataset.action === "confirm-shift") {
     if (!state.sheet) return;
     state.pendingShift = false;
-    state.sheet.generatedAt = new Date();
-    applyAssignments({ randomize: true });
-    const versionLabel = `ver${state.shiftVersions.length + 1}`;
-    state.shiftVersions = [...state.shiftVersions, versionLabel];
-    openShiftVersionWindow(versionLabel);
+    createShiftVersion();
     closeDialog(".confirm-dialog");
   }
 });
