@@ -1777,13 +1777,59 @@ const applyAssignments = ({ randomize } = {}) => {
     return { availableDay, availableNight };
   };
 
+  const getAssignedNightWards = (dayIndex) => {
+    const wards = new Set();
+    const columnCells = cells.filter(
+      (cell) => Number(cell.dataset.col) === dayIndex
+    );
+    columnCells.forEach((cell) => {
+      const assignedLabel = cell.querySelector(".assigned-shift");
+      if (!assignedLabel || assignedLabel.textContent !== "●") return;
+      const rowIndex = Number(cell.dataset.row);
+      const ward = state.staff[rowIndex]?.ward;
+      if (ward) wards.add(ward);
+    });
+    return wards;
+  };
+
   const assign = (cellsToUse, required, label, shift) => {
     let count = 0;
-    const assignedNightWards = new Set();
+    const assignedNightWards =
+      shift === "night" ? getAssignedNightWards(day.index) : new Set();
     const sortedCandidates = sortCandidates(cellsToUse, shift);
     for (const entry of sortedCandidates) {
       if (count >= required) break;
       if (isOverMax(entry.rowIndex, shift)) continue;
+      if (shift === "night") {
+        const ward = state.staff[entry.rowIndex]?.ward;
+        if (ward && assignedNightWards.has(ward)) continue;
+        if (ward) assignedNightWards.add(ward);
+      }
+      const assignedLabel = entry.cell.querySelector(".assigned-shift");
+      if (assignedLabel && assignedLabel.textContent) continue;
+      assignedLabel.textContent = label;
+      entry.cell.classList.add("assigned");
+      const rowIndex = entry.rowIndex;
+      if (!Number.isNaN(rowIndex)) {
+        state.assignments[rowIndex][day.index] = label;
+      }
+      if (shift === "day") {
+        dayCounts[rowIndex] += 1;
+      } else {
+        nightCounts[rowIndex] += 1;
+      }
+      count += 1;
+    }
+    return count;
+  };
+
+  const assignRelaxed = (cellsToUse, required, label, shift) => {
+    let count = 0;
+    const assignedNightWards =
+      shift === "night" ? getAssignedNightWards(day.index) : new Set();
+    const sortedCandidates = sortCandidates(cellsToUse, shift);
+    for (const entry of sortedCandidates) {
+      if (count >= required) break;
       if (shift === "night") {
         const ward = state.staff[entry.rowIndex]?.ward;
         if (ward && assignedNightWards.has(ward)) continue;
@@ -1838,14 +1884,60 @@ const applyAssignments = ({ randomize } = {}) => {
   state.sheet.days.forEach((day) => {
     if (state.fixedDays.has(day.index)) return;
     const { availableNight } = buildAvailable(day);
-    const nightCount = assign(availableNight, day.requiredNight, "●", "night");
+    let nightCount = assign(availableNight, day.requiredNight, "●", "night");
+    if (nightCount < day.requiredNight) {
+      const columnCells = cells.filter(
+        (cell) => Number(cell.dataset.col) === day.index
+      );
+      const relaxedNight = [];
+      columnCells.forEach((cell) => {
+        const rowIndex = Number(cell.dataset.row);
+        const person = state.staff[rowIndex];
+        if (!person) return;
+        if (!isStaffAvailableForDay(person, day)) return;
+        const value = state.shiftPreferences?.[rowIndex]?.[day.index] || "";
+        if (value === "off") return;
+        if (isShiftTypeAllowed(rowIndex, "night")) {
+          relaxedNight.push({ cell, rowIndex });
+        }
+      });
+      nightCount += assignRelaxed(
+        relaxedNight,
+        day.requiredNight - nightCount,
+        "●",
+        "night"
+      );
+    }
     assignedNights.set(day.index, nightCount);
   });
 
   state.sheet.days.forEach((day) => {
     if (state.fixedDays.has(day.index)) return;
     const { availableDay } = buildAvailable(day);
-    const dayCount = assign(availableDay, day.requiredDay, "○", "day");
+    let dayCount = assign(availableDay, day.requiredDay, "○", "day");
+    if (dayCount < day.requiredDay) {
+      const columnCells = cells.filter(
+        (cell) => Number(cell.dataset.col) === day.index
+      );
+      const relaxedDay = [];
+      columnCells.forEach((cell) => {
+        const rowIndex = Number(cell.dataset.row);
+        const person = state.staff[rowIndex];
+        if (!person) return;
+        if (!isStaffAvailableForDay(person, day)) return;
+        const value = state.shiftPreferences?.[rowIndex]?.[day.index] || "";
+        if (value === "off") return;
+        if (isShiftTypeAllowed(rowIndex, "day")) {
+          relaxedDay.push({ cell, rowIndex });
+        }
+      });
+      dayCount += assignRelaxed(
+        relaxedDay,
+        day.requiredDay - dayCount,
+        "○",
+        "day"
+      );
+    }
     assignExtras(availableDay, "○", "day");
     const nightCount = assignedNights.get(day.index) ?? 0;
     if (dayCount < day.requiredDay || nightCount < day.requiredNight) {
