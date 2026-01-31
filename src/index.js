@@ -1880,8 +1880,18 @@ const applyAssignments = ({ randomize } = {}) => {
   };
 
   const assignedNights = new Map();
+  const nightsPriority = [...state.sheet.days].sort((a, b) => {
+    if (b.requiredNight !== a.requiredNight) return b.requiredNight - a.requiredNight;
+    if (b.requiredDay !== a.requiredDay) return b.requiredDay - a.requiredDay;
+    return a.index - b.index;
+  });
+  const daysPriority = [...state.sheet.days].sort((a, b) => {
+    if (b.requiredDay !== a.requiredDay) return b.requiredDay - a.requiredDay;
+    if (b.requiredNight !== a.requiredNight) return b.requiredNight - a.requiredNight;
+    return a.index - b.index;
+  });
 
-  state.sheet.days.forEach((day) => {
+  nightsPriority.forEach((day) => {
     if (state.fixedDays.has(day.index)) return;
     const { availableNight } = buildAvailable(day);
     let nightCount = assign(availableNight, day.requiredNight, "●", "night");
@@ -1911,7 +1921,7 @@ const applyAssignments = ({ randomize } = {}) => {
     assignedNights.set(day.index, nightCount);
   });
 
-  state.sheet.days.forEach((day) => {
+  daysPriority.forEach((day) => {
     if (state.fixedDays.has(day.index)) return;
     const { availableDay } = buildAvailable(day);
     let dayCount = assign(availableDay, day.requiredDay, "○", "day");
