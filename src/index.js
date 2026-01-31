@@ -1800,10 +1800,10 @@ const applyAssignments = ({ randomize } = {}) => {
     return wards;
   };
 
-  const assign = (cellsToUse, required, label, shift) => {
+  const assign = (cellsToUse, required, label, shift, dayIndex) => {
     let count = 0;
     const assignedNightWards =
-      shift === "night" ? getAssignedNightWards(day.index) : new Set();
+      shift === "night" ? getAssignedNightWards(dayIndex) : new Set();
     const sortedCandidates = sortCandidates(cellsToUse, shift);
     for (const entry of sortedCandidates) {
       if (count >= required) break;
@@ -1819,7 +1819,7 @@ const applyAssignments = ({ randomize } = {}) => {
       entry.cell.classList.add("assigned");
       const rowIndex = entry.rowIndex;
       if (!Number.isNaN(rowIndex)) {
-        state.assignments[rowIndex][day.index] = label;
+        state.assignments[rowIndex][dayIndex] = label;
       }
       if (shift === "day") {
         dayCounts[rowIndex] += 1;
@@ -1831,10 +1831,10 @@ const applyAssignments = ({ randomize } = {}) => {
     return count;
   };
 
-  const assignRelaxed = (cellsToUse, required, label, shift) => {
+  const assignRelaxed = (cellsToUse, required, label, shift, dayIndex) => {
     let count = 0;
     const assignedNightWards =
-      shift === "night" ? getAssignedNightWards(day.index) : new Set();
+      shift === "night" ? getAssignedNightWards(dayIndex) : new Set();
     const sortedCandidates = sortCandidates(cellsToUse, shift);
     for (const entry of sortedCandidates) {
       if (count >= required) break;
@@ -1849,7 +1849,7 @@ const applyAssignments = ({ randomize } = {}) => {
       entry.cell.classList.add("assigned");
       const rowIndex = entry.rowIndex;
       if (!Number.isNaN(rowIndex)) {
-        state.assignments[rowIndex][day.index] = label;
+        state.assignments[rowIndex][dayIndex] = label;
       }
       if (shift === "day") {
         dayCounts[rowIndex] += 1;
@@ -1861,7 +1861,7 @@ const applyAssignments = ({ randomize } = {}) => {
     return count;
   };
 
-  const assignExtras = (cellsToUse, label, shift) => {
+  const assignExtras = (cellsToUse, label, shift, dayIndex) => {
     const assignedNightWards = new Set();
     const sortedCandidates = sortCandidates(cellsToUse, shift);
     for (const entry of sortedCandidates) {
@@ -1877,7 +1877,7 @@ const applyAssignments = ({ randomize } = {}) => {
       entry.cell.classList.add("assigned");
       const rowIndex = entry.rowIndex;
       if (!Number.isNaN(rowIndex)) {
-        state.assignments[rowIndex][day.index] = label;
+        state.assignments[rowIndex][dayIndex] = label;
       }
       if (shift === "day") {
         dayCounts[rowIndex] += 1;
@@ -1902,7 +1902,13 @@ const applyAssignments = ({ randomize } = {}) => {
   nightsPriority.forEach((day) => {
     if (state.fixedDays.has(day.index)) return;
     const { availableNight } = buildAvailable(day);
-    let nightCount = assign(availableNight, day.requiredNight, "●", "night");
+    let nightCount = assign(
+      availableNight,
+      day.requiredNight,
+      "●",
+      "night",
+      day.index
+    );
     if (nightCount < day.requiredNight) {
       const columnCells = cells.filter(
         (cell) => Number(cell.dataset.col) === day.index
@@ -1923,7 +1929,8 @@ const applyAssignments = ({ randomize } = {}) => {
         relaxedNight,
         day.requiredNight - nightCount,
         "●",
-        "night"
+        "night",
+        day.index
       );
     }
     assignedNights.set(day.index, nightCount);
@@ -1932,7 +1939,13 @@ const applyAssignments = ({ randomize } = {}) => {
   daysPriority.forEach((day) => {
     if (state.fixedDays.has(day.index)) return;
     const { availableDay } = buildAvailable(day);
-    let dayCount = assign(availableDay, day.requiredDay, "○", "day");
+    let dayCount = assign(
+      availableDay,
+      day.requiredDay,
+      "○",
+      "day",
+      day.index
+    );
     if (dayCount < day.requiredDay) {
       const columnCells = cells.filter(
         (cell) => Number(cell.dataset.col) === day.index
@@ -1953,10 +1966,11 @@ const applyAssignments = ({ randomize } = {}) => {
         relaxedDay,
         day.requiredDay - dayCount,
         "○",
-        "day"
+        "day",
+        day.index
       );
     }
-    assignExtras(availableDay, "○", "day");
+    assignExtras(availableDay, "○", "day", day.index);
     const nightCount = assignedNights.get(day.index) ?? 0;
     if (dayCount < day.requiredDay || nightCount < day.requiredNight) {
       warnings.push(day.index);
