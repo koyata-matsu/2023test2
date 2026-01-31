@@ -311,7 +311,7 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
     availableWeekdays: person.availableWeekdays
   }));
   const sheetId = state.currentSheetId;
-  const rows = state.staff
+          const rows = state.staff
     .map((person, rowIndex) => {
       const cells = state.sheet.days
         .map((day) => {
@@ -325,7 +325,7 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
                 <option value="○" ${label === "○" ? "selected" : ""}>○</option>
                 <option value="●" ${label === "●" ? "selected" : ""}>●</option>
                 <option value="※" ${label === "※" ? "selected" : ""}>※</option>
-                <option value="休" ${label === "休" ? "selected" : ""}>休</option>
+                <option value="休" ${label === "休" ? "selected" : ""}>休み</option>
               </select>
             </td>
           `;
@@ -969,6 +969,9 @@ const renderGroupList = () => `
                         <button class="ghost" data-action="open-sheet" data-id="${
                           sheet.id
                         }">開く</button>
+                        <button class="ghost" data-action="reset-sheet" data-id="${
+                          sheet.id
+                        }">リセット</button>
                       </div>
                     </div>
                   `
@@ -1294,6 +1297,35 @@ window.saveShiftResult = ({ sheetId, assignments, fixedDays, requiredDay, requir
       }
     });
     state.sheet.generatedAt = updatedSheet.generatedAt;
+  }
+  persistState();
+  renderApp();
+};
+
+const resetSavedSheet = (sheetId) => {
+  if (!sheetId) return;
+  const sheetIndex = state.sheets.findIndex((item) => item.id === sheetId);
+  if (sheetIndex === -1) return;
+  const sheet = state.sheets[sheetIndex];
+  const updatedSheet = {
+    ...sheet,
+    savedAssignments: [],
+    savedFixedDays: [],
+    generatedAt: null
+  };
+  state.sheets = [
+    ...state.sheets.slice(0, sheetIndex),
+    updatedSheet,
+    ...state.sheets.slice(sheetIndex + 1)
+  ];
+  if (state.currentSheetId === sheetId && state.sheet) {
+    state.assignments = state.staff.map(() =>
+      Array(state.sheet.days.length).fill("")
+    );
+    state.fixedDays = new Set();
+    state.blockedDays = new Set();
+    state.sheet.warnings = [];
+    state.sheet.generatedAt = null;
   }
   persistState();
   renderApp();
@@ -1708,6 +1740,14 @@ document.body.addEventListener("click", (event) => {
   if (target.dataset.action === "open-sheet") {
     const sheetId = target.dataset.id;
     openSheetFromList(sheetId);
+  }
+
+  if (target.dataset.action === "reset-sheet") {
+    const sheetId = target.dataset.id;
+    if (!sheetId) return;
+    const confirmed = window.confirm("このシフトをリセットして空にしますか？");
+    if (!confirmed) return;
+    resetSavedSheet(sheetId);
   }
 
   if (target.dataset.action === "close") {
