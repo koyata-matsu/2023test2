@@ -226,6 +226,19 @@ const formatShiftLimits = (person) => {
   return `日:${day} / 夜:${night}`;
 };
 
+const sanitizeAssignments = (assignments, staff) => {
+  if (!Array.isArray(assignments)) return [];
+  return assignments.map((row, rowIndex) => {
+    const shiftType = staff?.[rowIndex]?.shiftType;
+    if (!Array.isArray(row)) return [];
+    return row.map((value) => {
+      if (shiftType === "昼専" && value === "●") return "";
+      if (shiftType === "夜専" && value === "○") return "";
+      return value;
+    });
+  });
+};
+
 const isStaffAvailableForDay = (person, day) => {
   if (person.availabilityType === "weekday") {
     return day.weekday !== "土" && day.weekday !== "日";
@@ -2337,16 +2350,16 @@ const openSheetFromList = (sheetId) => {
       }
     });
   }
-  state.shiftPreferences = state.staff.map(() =>
-    Array(state.sheet.days.length).fill("")
-  );
-  if (Array.isArray(sheet.savedAssignments)) {
-    state.assignments = sheet.savedAssignments;
-  } else {
-    state.assignments = state.staff.map(() =>
-      Array(state.sheet.days.length).fill("")
-    );
-  }
+      state.shiftPreferences = state.staff.map(() =>
+        Array(state.sheet.days.length).fill("")
+      );
+      if (Array.isArray(sheet.savedAssignments)) {
+        state.assignments = sanitizeAssignments(sheet.savedAssignments, state.staff);
+      } else {
+        state.assignments = state.staff.map(() =>
+          Array(state.sheet.days.length).fill("")
+        );
+      }
   if (Array.isArray(sheet.savedFixedCells)) {
     state.fixedCells = new Set(sheet.savedFixedCells);
   } else {
@@ -2802,6 +2815,7 @@ document.body.addEventListener("submit", (event) => {
       state.shiftPreferences = state.staff.map(() =>
         Array(state.sheet.days.length).fill("")
       );
+      state.assignments = sanitizeAssignments(state.assignments, state.staff);
       state.fixedDays.clear();
       state.lastShiftAttempts = null;
       state.lastShiftAttemptLimit = null;
