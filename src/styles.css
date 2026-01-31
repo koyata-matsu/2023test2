@@ -37,6 +37,39 @@ body {
   gap: 12px;
 }
 
+.mode-pill {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e3a8a;
+  background: #dbeafe;
+  padding: 6px 12px;
+  border-radius: 999px;
+}
+
+.status-pill {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  background: #e2e8f0;
+  padding: 6px 12px;
+  border-radius: 999px;
+}
+
+.status-pill.ok {
+  color: #0f766e;
+  background: #ccfbf1;
+}
+
+.status-pill.offline {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.status-pill.error {
+  color: #b45309;
+  background: #fef3c7;
+}
+
 .app-header h1 {
   margin: 4px 0 0;
   font-size: 28px;
@@ -556,6 +589,11 @@ body {
   cursor: pointer;
 }
 
+.fix-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .day-cell.warning {
   background: #fee2e2;
 }
@@ -693,6 +731,12 @@ body {
   border: 1px solid #c7d2fe;
   text-align: center;
   font-size: 12px;
+}
+
+.required-input:disabled {
+  background: #e2e8f0;
+  color: #94a3b8;
+  cursor: not-allowed;
 }
 
 .shift-cell {
