@@ -250,6 +250,16 @@ body {
   font-size: 13px;
 }
 
+.shift-limit-controls .checkbox-label {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.shift-limit-controls .checkbox-label input {
+  width: auto;
+  padding: 0;
+}
+
 .url-block {
   display: grid;
   gap: 6px;

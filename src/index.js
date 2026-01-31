@@ -927,6 +927,12 @@ const renderSidePanel = () => `
               state.ownerMode ? "" : "disabled"
             } />
           </label>
+          <label class="checkbox-label">
+            <input id="night-max-priority" type="checkbox" ${
+              state.sheet?.nightMaxPriority ?? true ? "checked" : ""
+            } ${state.ownerMode ? "" : "disabled"} />
+            夜勤は最大夜勤まで入れる
+          </label>
         </div>
         <button class="accent" id="auto-shift" ${
           state.ownerMode ? "" : "disabled"
@@ -1697,9 +1703,11 @@ const applyAssignments = ({ randomize } = {}) => {
     const maxDay = state.sheet?.maxDay ?? 20;
     const maxNight = state.sheet?.maxNight ?? 10;
     const maxTotal = state.sheet?.maxTotal ?? maxDay;
+    const nightMaxPriority = state.sheet?.nightMaxPriority ?? true;
     const weightedTotal = nightCount * 2 + dayCount;
     if (shift === "night") {
       if (nightCount >= maxNight) return true;
+      if (nightMaxPriority) return false;
       return weightedTotal + 2 > maxTotal;
     }
     if (dayCount >= maxDay) return true;
@@ -2117,7 +2125,8 @@ const openSheetFromList = (sheetId) => {
     generatedAt: sheet.generatedAt,
     maxDay: sheet.maxDay ?? 20,
     maxNight: sheet.maxNight ?? 10,
-    maxTotal: sheet.maxTotal ?? 20
+    maxTotal: sheet.maxTotal ?? 20,
+    nightMaxPriority: sheet.nightMaxPriority ?? true
   };
   if (Array.isArray(sheet.savedRequiredDay)) {
     state.sheet.days.forEach((day, index) => {
@@ -2442,6 +2451,23 @@ document.body.addEventListener("change", (event) => {
     }
   }
 
+  if (target instanceof HTMLInputElement && target.id === "night-max-priority") {
+    if (!state.ownerMode) return;
+    if (!state.sheet) return;
+    const value = target.checked;
+    state.sheet.nightMaxPriority = value;
+    if (state.currentSheetId) {
+      const sheetIndex = state.sheets.findIndex((item) => item.id === state.currentSheetId);
+      if (sheetIndex !== -1) {
+        state.sheets[sheetIndex] = {
+          ...state.sheets[sheetIndex],
+          nightMaxPriority: value
+        };
+        persistState();
+      }
+    }
+  }
+
   if (target instanceof HTMLSelectElement && target.id === "availability-select") {
     const panel = target.closest(".settings-panel");
     if (!panel) return;
@@ -2535,7 +2561,8 @@ document.body.addEventListener("submit", (event) => {
         savedRequiredNight: [],
         maxDay: 20,
         maxNight: 10,
-        maxTotal: 20
+        maxTotal: 20,
+        nightMaxPriority: true
       };
       state.sheets = [newSheet, ...state.sheets.filter((item) => item.id !== sheetId)];
       persistState();
@@ -2549,7 +2576,8 @@ document.body.addEventListener("submit", (event) => {
         generatedAt: new Date(),
         maxDay: 20,
         maxNight: 10,
-        maxTotal: 20
+        maxTotal: 20,
+        nightMaxPriority: true
       };
       state.shiftPreferences = state.staff.map(() =>
         Array(state.sheet.days.length).fill("")
