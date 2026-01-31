@@ -1713,6 +1713,16 @@ const applyAssignments = ({ randomize } = {}) => {
     return list.sort((a, b) => {
       const limitsA = staffLimits[a.rowIndex];
       const limitsB = staffLimits[b.rowIndex];
+      if (shift === "night") {
+        const aNightOnly = limitsA?.shiftType === "夜専";
+        const bNightOnly = limitsB?.shiftType === "夜専";
+        if (aNightOnly !== bNightOnly) return aNightOnly ? -1 : 1;
+      }
+      if (shift === "day") {
+        const aDayOnly = limitsA?.shiftType === "昼専";
+        const bDayOnly = limitsB?.shiftType === "昼専";
+        if (aDayOnly !== bDayOnly) return aDayOnly ? -1 : 1;
+      }
       const minA =
         shift === "day" ? parseLimit(limitsA?.dayMin) : parseLimit(limitsA?.nightMin);
       const minB =
