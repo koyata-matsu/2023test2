@@ -1439,7 +1439,6 @@ const applyAssignments = ({ randomize } = {}) => {
     if (dayCount < day.requiredDay || nightCount < day.requiredNight) {
       warnings.push(day.index);
       blocked.add(day.index);
-      state.fixedDays.add(day.index);
     }
   });
 
