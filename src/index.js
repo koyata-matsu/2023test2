@@ -932,9 +932,41 @@ const renderLogin = () => `
       </label>
       <div class="button-row">
         <button class="primary" id="login-owner">ログイン</button>
-        <button class="ghost" id="register-owner">新規登録</button>
+        <button class="ghost" id="go-register">新規登録</button>
       </div>
       <p class="helper-text">別端末でも使うにはサーバー接続が必要です。</p>
+    </section>
+  </div>
+`;
+
+const renderRegister = () => `
+  <div class="page login">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">バイトシフト調整</p>
+        <h1>新規登録</h1>
+      </div>
+      <div class="header-actions">
+        <button class="ghost" id="back-to-login">ログインへ戻る</button>
+      </div>
+    </header>
+    <section class="card">
+      <label>
+        メールアドレス
+        <input id="owner-email" type="email" placeholder="owner@example.com" value="${
+          state.owner.email
+        }" />
+      </label>
+      <label>
+        パスワード
+        <input id="owner-password" type="password" placeholder="8文字以上" value="${
+          state.owner.password
+        }" />
+      </label>
+      <div class="button-row">
+        <button class="primary" id="register-owner">登録する</button>
+      </div>
+      <p class="helper-text">登録後、そのままログインして同期を開始します。</p>
     </section>
   </div>
 `;
@@ -1384,6 +1416,8 @@ const renderApp = () => {
   let content = "";
   if (state.view === "login") {
     content = renderLogin();
+  } else if (state.view === "register") {
+    content = renderRegister();
   } else if (state.view === "group") {
     content = renderGroupCreation();
   } else if (state.view === "dashboard") {
@@ -1843,6 +1877,18 @@ void initApp();
 document.body.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
+
+  if (target.id === "go-register") {
+    state.view = "register";
+    renderApp();
+    return;
+  }
+
+  if (target.id === "back-to-login") {
+    state.view = "login";
+    renderApp();
+    return;
+  }
 
   if (target.id === "login-owner" || target.id === "register-owner") {
     const emailInput = document.getElementById("owner-email");
