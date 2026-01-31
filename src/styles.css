@@ -216,6 +216,17 @@ body {
   cursor: pointer;
 }
 
+.shift-action .ghost {
+  width: 100%;
+  border: 1px solid #cbd5f5;
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #ffffff;
+  cursor: pointer;
+}
+
 .url-block {
   display: grid;
   gap: 6px;
@@ -426,8 +437,7 @@ body {
 .shift-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 0;
-  table-layout: fixed;
+  min-width: 1200px;
 }
 
 .shift-table th,
@@ -520,6 +530,13 @@ body {
   margin-top: 6px;
 }
 
+.row-actions .settings-button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin-top: 0;
+}
+
 .action-button {
   border: 1px solid #cbd5f5;
   border-radius: 8px;
@@ -527,6 +544,16 @@ body {
   background: #ffffff;
   font-size: 11px;
   cursor: pointer;
+}
+
+.action-button.icon-button {
+  border-radius: 50%;
+  padding: 0;
+}
+
+.group-name-input {
+  width: 240px;
+  max-width: 100%;
 }
 
 .action-button.danger {
@@ -716,7 +743,7 @@ body {
 }
 
 .day-cell {
-  min-width: 56px;
+  min-width: 76px;
 }
 
 .date {
@@ -731,7 +758,7 @@ body {
 }
 
 .required-cell {
-  min-width: 56px;
+  min-width: 76px;
   background: #eef2ff;
 }
 
@@ -847,6 +874,6 @@ body {
   }
 
   .shift-table {
-    min-width: 0;
+    min-width: 960px;
   }
 }

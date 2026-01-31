@@ -914,6 +914,9 @@ const renderSidePanel = () => `
         ? `
       <section class="shift-action">
         <h2>シフト作成</h2>
+        <button class="ghost" id="reset-sheet" ${
+          state.ownerMode ? "" : "disabled"
+        }>シフト表をリセット</button>
         <button class="accent" id="auto-shift" ${
           state.ownerMode ? "" : "disabled"
         }>シフトを作成する</button>
@@ -1062,7 +1065,7 @@ const renderGroupCreation = () => `
           <div class="control-group">
             <label>
               グループ名
-              <input id="group-name" type="text" value="${state.groupDraftName}" list="group-suggestions" />
+              <input id="group-name" class="group-name-input" type="text" value="${state.groupDraftName}" list="group-suggestions" required />
             </label>
             <button class="primary" id="save-group" ${
               state.ownerMode ? "" : "disabled"
@@ -1094,18 +1097,15 @@ const renderGroupCreation = () => `
                         <div class="name-block">
                           <div class="name">${person.name || "（未入力）"}</div>
                           <div class="row-actions">
-                            <button class="edit-button" data-row="${rowIndex}" ${
+                            <button class="icon-button action-button" data-action="move-up" data-row="${rowIndex}" ${
                               state.ownerMode ? "" : "disabled"
-                            }>編集</button>
-                            <button class="ghost action-button" data-action="move-up" data-row="${rowIndex}" ${
+                            } aria-label="上へ">▲</button>
+                            <button class="icon-button action-button" data-action="move-down" data-row="${rowIndex}" ${
                               state.ownerMode ? "" : "disabled"
-                            }>上へ</button>
-                            <button class="ghost action-button" data-action="move-down" data-row="${rowIndex}" ${
+                            } aria-label="下へ">▼</button>
+                            <button class="icon-button settings-button" data-row="${rowIndex}" ${
                               state.ownerMode ? "" : "disabled"
-                            }>下へ</button>
-                            <button class="ghost action-button danger" data-action="delete-staff" data-row="${rowIndex}" ${
-                              state.ownerMode ? "" : "disabled"
-                            }>削除</button>
+                            } aria-label="編集">⚙</button>
                           </div>
                         </div>
                       </th>
@@ -1203,9 +1203,6 @@ const renderGroupList = () => `
                         <button class="ghost" data-action="open-sheet" data-id="${
                           sheet.id
                         }">開く</button>
-                        <button class="ghost" data-action="reset-sheet" data-id="${
-                          sheet.id
-                        }" ${state.ownerMode ? "" : "disabled"}>リセット</button>
                       </div>
                     </div>
                   `
@@ -1381,6 +1378,7 @@ const renderSettingsDialog = () => `
         </label>
       </div>
       <div class="panel-actions">
+        <button type="button" class="ghost" data-action="delete-staff">削除</button>
         <button type="button" class="ghost" data-action="close">キャンセル</button>
         <button type="submit" class="primary" data-action="save">保存</button>
       </div>
@@ -2098,10 +2096,13 @@ document.body.addEventListener("click", (event) => {
 
   if (target.dataset.action === "delete-staff") {
     if (!state.ownerMode) return;
-    const rowIndex = Number(target.dataset.row);
+    const panel = target.closest(".settings-panel");
+    const rowIndex = panel ? Number(panel.dataset.row) : Number(target.dataset.row);
+    if (Number.isNaN(rowIndex)) return;
     const confirmed = window.confirm("この勤務者を削除しますか？");
     if (!confirmed) return;
     deleteStaffRow(rowIndex);
+    closeDialog(".settings-panel");
   }
 
   if (target.id === "auto-shift" && state.ownerMode) {
@@ -2124,7 +2125,7 @@ document.body.addEventListener("click", (event) => {
     openShiftVersionWindow(versionLabel);
   }
 
-  if (target.classList.contains("settings-button") || target.classList.contains("edit-button")) {
+  if (target.classList.contains("settings-button")) {
     const rowIndex = Number(target.dataset.row);
     openSettingsPanel(rowIndex);
   }
@@ -2157,18 +2158,18 @@ document.body.addEventListener("click", (event) => {
     void logoutOwner();
   }
 
-  if (target.dataset.action === "open-sheet") {
-    const sheetId = target.dataset.id;
-    openSheetFromList(sheetId);
-  }
-
-  if (target.dataset.action === "reset-sheet") {
+  if (target.id === "reset-sheet") {
     if (!state.ownerMode) return;
-    const sheetId = target.dataset.id;
+    const sheetId = state.currentSheetId;
     if (!sheetId) return;
     const confirmed = window.confirm("このシフトをリセットして空にしますか？");
     if (!confirmed) return;
     resetSavedSheet(sheetId);
+  }
+
+  if (target.dataset.action === "open-sheet") {
+    const sheetId = target.dataset.id;
+    openSheetFromList(sheetId);
   }
 
   if (target.dataset.action === "close") {
