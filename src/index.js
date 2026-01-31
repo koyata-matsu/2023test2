@@ -2712,18 +2712,35 @@ document.body.addEventListener("submit", (event) => {
       nightMinInput instanceof HTMLInputElement &&
       nightMaxInput instanceof HTMLInputElement
     ) {
+      const shiftType = shiftTypeSelect.value;
+      let dayMin = dayMinInput.value;
+      let dayMax = dayMaxInput.value;
+      let nightMin = nightMinInput.value;
+      let nightMax = nightMaxInput.value;
+      if (shiftType === "昼専") {
+        nightMin = "0";
+        nightMax = "0";
+      }
+      if (shiftType === "夜専") {
+        dayMin = "0";
+        dayMax = "0";
+      }
+      dayMinInput.value = dayMin;
+      dayMaxInput.value = dayMax;
+      nightMinInput.value = nightMin;
+      nightMaxInput.value = nightMax;
       state.staff[rowIndex].name = nameInput.value.trim();
-      state.staff[rowIndex].shiftType = shiftTypeSelect.value;
+      state.staff[rowIndex].shiftType = shiftType;
       state.staff[rowIndex].ward = wardSelect.value;
       state.staff[rowIndex].availabilityType = availabilitySelect.value;
       state.staff[rowIndex].availableWeekdays =
         availabilitySelect.value === "specific"
           ? weekdayInputs.filter((input) => input.checked).map((input) => input.value)
           : [];
-      state.staff[rowIndex].dayMin = dayMinInput.value;
-      state.staff[rowIndex].dayMax = dayMaxInput.value;
-      state.staff[rowIndex].nightMin = nightMinInput.value;
-      state.staff[rowIndex].nightMax = nightMaxInput.value;
+      state.staff[rowIndex].dayMin = dayMin;
+      state.staff[rowIndex].dayMax = dayMax;
+      state.staff[rowIndex].nightMin = nightMin;
+      state.staff[rowIndex].nightMax = nightMax;
       renderApp();
     }
     panel.close();
