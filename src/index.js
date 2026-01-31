@@ -2695,6 +2695,30 @@ document.body.addEventListener("change", (event) => {
       }
     });
   }
+
+  if (target instanceof HTMLSelectElement && target.id === "shift-type-select") {
+    const panel = target.closest(".settings-panel");
+    if (!panel) return;
+    const dayMinInput = panel.querySelector("#day-min");
+    const dayMaxInput = panel.querySelector("#day-max");
+    const nightMinInput = panel.querySelector("#night-min");
+    const nightMaxInput = panel.querySelector("#night-max");
+    if (
+      dayMinInput instanceof HTMLInputElement &&
+      dayMaxInput instanceof HTMLInputElement &&
+      nightMinInput instanceof HTMLInputElement &&
+      nightMaxInput instanceof HTMLInputElement
+    ) {
+      if (target.value === "昼専") {
+        nightMinInput.value = "0";
+        nightMaxInput.value = "0";
+      }
+      if (target.value === "夜専") {
+        dayMinInput.value = "0";
+        dayMaxInput.value = "0";
+      }
+    }
+  }
 });
 
 document.body.addEventListener("submit", (event) => {
