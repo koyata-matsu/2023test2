@@ -1661,12 +1661,14 @@ const createShiftVersion = () => {
   state.sheet.generatedAt = new Date();
   const maxAttempts = 100;
   let bestResult = null;
+  let attempts = 0;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    attempts += 1;
     const result = applyAssignments({ randomize: true, silent: true });
-    if (!bestResult || result.warnings.length < bestResult.warnings.length) {
+    if (result.warnings.length === 0) {
       bestResult = result;
+      break;
     }
-    if (result.warnings.length === 0) break;
   }
   if (bestResult) {
     state.assignments = bestResult.assignments;
@@ -1674,7 +1676,9 @@ const createShiftVersion = () => {
     state.blockedDays = bestResult.blocked;
     renderApp();
   } else {
-    applyAssignments({ randomize: true });
+    state.warningMessage = `シフト作成に失敗しました（${attempts}回試行）。不足日があるため作成できません。`;
+    openDialog(".warning-dialog");
+    return;
   }
   const versionLabel = `ver${state.shiftVersions.length + 1}`;
   state.shiftVersions = [...state.shiftVersions, versionLabel];
