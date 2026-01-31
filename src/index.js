@@ -1866,6 +1866,7 @@ const applyAssignments = ({ randomize, silent } = {}) => {
     const sortedCandidates = sortCandidates(cellsToUse, shift);
     for (const entry of sortedCandidates) {
       if (count >= required) break;
+      if (isOverMax(entry.rowIndex, shift)) continue;
       if (shift === "night") {
         const ward = state.staff[entry.rowIndex]?.ward;
         if (ward && assignedNightWards.has(ward)) continue;
