@@ -1434,8 +1434,29 @@ const applyAssignments = ({ randomize } = {}) => {
       return count;
     };
 
+    const assignExtras = (cellsToUse, label, shift) => {
+      const sortedCandidates = sortCandidates(cellsToUse, shift);
+      for (const entry of sortedCandidates) {
+        if (isOverMax(entry.rowIndex, shift)) continue;
+        const assignedLabel = entry.cell.querySelector(".assigned-shift");
+        if (assignedLabel && assignedLabel.textContent) continue;
+        assignedLabel.textContent = label;
+        entry.cell.classList.add("assigned");
+        const rowIndex = entry.rowIndex;
+        if (!Number.isNaN(rowIndex)) {
+          state.assignments[rowIndex][day.index] = label;
+        }
+        if (shift === "day") {
+          dayCounts[rowIndex] += 1;
+        } else {
+          nightCounts[rowIndex] += 1;
+        }
+      }
+    };
+
     const dayCount = assign(availableDay, day.requiredDay, "○", "day");
     const nightCount = assign(availableNight, day.requiredNight, "●", "night");
+    assignExtras(availableDay, "○", "day");
     if (dayCount < day.requiredDay || nightCount < day.requiredNight) {
       warnings.push(day.index);
       blocked.add(day.index);
