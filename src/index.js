@@ -1659,13 +1659,29 @@ const deleteStaffRow = (rowIndex) => {
 const createShiftVersion = () => {
   if (!state.sheet) return;
   state.sheet.generatedAt = new Date();
-  applyAssignments({ randomize: true });
+  const maxAttempts = 100;
+  let bestResult = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const result = applyAssignments({ randomize: true, silent: true });
+    if (!bestResult || result.warnings.length < bestResult.warnings.length) {
+      bestResult = result;
+    }
+    if (result.warnings.length === 0) break;
+  }
+  if (bestResult) {
+    state.assignments = bestResult.assignments;
+    state.sheet.warnings = bestResult.warnings;
+    state.blockedDays = bestResult.blocked;
+    renderApp();
+  } else {
+    applyAssignments({ randomize: true });
+  }
   const versionLabel = `ver${state.shiftVersions.length + 1}`;
   state.shiftVersions = [...state.shiftVersions, versionLabel];
   openShiftVersionWindow(versionLabel);
 };
 
-const applyAssignments = ({ randomize } = {}) => {
+const applyAssignments = ({ randomize, silent } = {}) => {
   if (!state.sheet) return;
   const warnings = [];
   const blocked = new Set();
@@ -1869,29 +1885,6 @@ const applyAssignments = ({ randomize } = {}) => {
     return count;
   };
 
-  const assignRelaxedAnyWard = (cellsToUse, required, label, shift, dayIndex) => {
-    let count = 0;
-    const sortedCandidates = sortCandidates(cellsToUse, shift);
-    for (const entry of sortedCandidates) {
-      if (count >= required) break;
-      const assignedLabel = entry.cell.querySelector(".assigned-shift");
-      if (assignedLabel && assignedLabel.textContent) continue;
-      assignedLabel.textContent = label;
-      entry.cell.classList.add("assigned");
-      const rowIndex = entry.rowIndex;
-      if (!Number.isNaN(rowIndex)) {
-        state.assignments[rowIndex][dayIndex] = label;
-      }
-      if (shift === "day") {
-        dayCounts[rowIndex] += 1;
-      } else {
-        nightCounts[rowIndex] += 1;
-      }
-      count += 1;
-    }
-    return count;
-  };
-
   const assignExtras = (cellsToUse, label, shift, dayIndex) => {
     const assignedNightWards = new Set();
     const sortedCandidates = sortCandidates(cellsToUse, shift);
@@ -1978,7 +1971,7 @@ const applyAssignments = ({ randomize } = {}) => {
         if (value === "off") return;
         anyNight.push({ cell, rowIndex });
       });
-      nightCount += assignRelaxedAnyWard(
+      nightCount += assignRelaxed(
         anyNight,
         day.requiredNight - nightCount,
         "●",
@@ -2033,7 +2026,14 @@ const applyAssignments = ({ randomize } = {}) => {
 
   state.sheet.warnings = warnings;
   state.blockedDays = blocked;
-  renderApp();
+  if (!silent) {
+    renderApp();
+  }
+  return {
+    warnings,
+    blocked,
+    assignments: structuredClone(state.assignments)
+  };
 };
 
 const openSettingsPanel = (rowIndex) => {
