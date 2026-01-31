@@ -654,7 +654,7 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
                   \`理由(夜勤): 勤務可能\${reasons.night.available}名 / 休み希望\${reasons.night.off}名 / 曜日不可\${reasons.night.unavailable}名 / 勤務タイプ不可\${reasons.night.shiftType}名 / 上限到達\${reasons.night.maxed}名\`
                 );
                 if (reasons.day.available > 0 || reasons.night.available > 0) {
-                  warnings.push("備考: 勤務可能な人がいるので、割り当てを追加してください。");
+                  warnings.push("備考: 勤務可能な人はいますが未割り当てです。手動で追加するか「作り直す」を実行してください。");
                 }
               }
             });
