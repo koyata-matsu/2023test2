@@ -1714,9 +1714,14 @@ const applyAssignments = ({ randomize } = {}) => {
       const limitsA = staffLimits[a.rowIndex];
       const limitsB = staffLimits[b.rowIndex];
       if (shift === "night") {
-        const aNightOnly = limitsA?.shiftType === "夜専";
-        const bNightOnly = limitsB?.shiftType === "夜専";
-        if (aNightOnly !== bNightOnly) return aNightOnly ? -1 : 1;
+        const rankNight = (limits) => {
+          if (limits?.shiftType === "夜専") return 0;
+          if (limits?.shiftType === "どちらも") return 1;
+          return 2;
+        };
+        const rankA = rankNight(limitsA);
+        const rankB = rankNight(limitsB);
+        if (rankA !== rankB) return rankA - rankB;
       }
       if (shift === "day") {
         const aDayOnly = limitsA?.shiftType === "昼専";
