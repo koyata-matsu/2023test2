@@ -1925,6 +1925,27 @@ const applyAssignments = ({ randomize, silent } = {}) => {
     }
   };
 
+  const applyNightRests = () => {
+    cells.forEach((cell) => {
+      const assignedLabel = cell.querySelector(".assigned-shift");
+      if (!assignedLabel || assignedLabel.textContent !== "●") return;
+      const rowIndex = Number(cell.dataset.row);
+      const colIndex = Number(cell.dataset.col);
+      if (Number.isNaN(rowIndex) || Number.isNaN(colIndex)) return;
+      const nextCell = cells.find(
+        (entry) =>
+          Number(entry.dataset.row) === rowIndex &&
+          Number(entry.dataset.col) === colIndex + 1
+      );
+      if (!nextCell) return;
+      const nextLabel = nextCell.querySelector(".assigned-shift");
+      if (!nextLabel || nextLabel.textContent) return;
+      nextLabel.textContent = "※";
+      nextCell.classList.add("assigned");
+      state.assignments[rowIndex][colIndex + 1] = "※";
+    });
+  };
+
   const assignedNights = new Map();
   const nightsPriority = [...state.sheet.days].sort((a, b) => {
     if (b.requiredNight !== a.requiredNight) return b.requiredNight - a.requiredNight;
@@ -1995,6 +2016,8 @@ const applyAssignments = ({ randomize, silent } = {}) => {
     }
     assignedNights.set(day.index, nightCount);
   });
+
+  applyNightRests();
 
   daysPriority.forEach((day) => {
     if (state.fixedDays.has(day.index)) return;
