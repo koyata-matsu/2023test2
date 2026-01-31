@@ -560,9 +560,15 @@ body {
   background: #fee2e2;
 }
 
+.day-cell.blocked,
+.required-cell.blocked {
+  background: #dbeafe;
+}
+
 .settings-panel,
 .sheet-dialog,
-.warning-dialog {
+.warning-dialog,
+.confirm-dialog {
   border: none;
   border-radius: 16px;
   padding: 0;
@@ -572,7 +578,8 @@ body {
 
 .settings-panel::backdrop,
 .sheet-dialog::backdrop,
-.warning-dialog::backdrop {
+.warning-dialog::backdrop,
+.confirm-dialog::backdrop {
   background: rgba(15, 23, 42, 0.4);
 }
 
