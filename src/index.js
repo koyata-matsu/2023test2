@@ -917,6 +917,20 @@ const renderSidePanel = () => `
         <button class="ghost" id="reset-sheet" ${
           state.ownerMode ? "" : "disabled"
         }>シフト表をリセット</button>
+        <div class="shift-limit-controls">
+          <label>
+            最大日勤
+            <input id="max-day" type="number" min="0" value="${state.sheet?.maxDay ?? 20}" ${
+              state.ownerMode ? "" : "disabled"
+            } />
+          </label>
+          <label>
+            最大夜勤
+            <input id="max-night" type="number" min="0" value="${state.sheet?.maxNight ?? 10}" ${
+              state.ownerMode ? "" : "disabled"
+            } />
+          </label>
+        </div>
         <button class="accent" id="auto-shift" ${
           state.ownerMode ? "" : "disabled"
         }>シフトを作成する</button>
@@ -1672,13 +1686,16 @@ const applyAssignments = ({ randomize } = {}) => {
   const meetsCombinedMax = (rowIndex, shift) => {
     const dayCount = dayCounts[rowIndex];
     const nightCount = nightCounts[rowIndex];
+    const maxDay = state.sheet?.maxDay ?? 20;
+    const maxNight = state.sheet?.maxNight ?? 10;
+    const maxTotal = state.sheet?.maxTotal ?? maxDay;
     const weightedTotal = nightCount * 2 + dayCount;
     if (shift === "night") {
-      if (nightCount >= 10) return true;
-      return weightedTotal + 2 > 20;
+      if (nightCount >= maxNight) return true;
+      return weightedTotal + 2 > maxTotal;
     }
-    if (dayCount >= 20) return true;
-    return weightedTotal + 1 > 20;
+    if (dayCount >= maxDay) return true;
+    return weightedTotal + 1 > maxTotal;
   };
 
   const isOverMax = (rowIndex, shift) => {
@@ -1944,7 +1961,10 @@ const openSheetFromList = (sheetId) => {
     groupName: sheet.groupName,
     days: buildDays(sheet.year, sheet.month),
     warnings: [],
-    generatedAt: sheet.generatedAt
+    generatedAt: sheet.generatedAt,
+    maxDay: sheet.maxDay ?? 20,
+    maxNight: sheet.maxNight ?? 10,
+    maxTotal: sheet.maxTotal ?? 20
   };
   if (Array.isArray(sheet.savedRequiredDay)) {
     state.sheet.days.forEach((day, index) => {
@@ -2237,6 +2257,42 @@ document.body.addEventListener("change", (event) => {
     }
   }
 
+  if (target instanceof HTMLInputElement && target.id === "max-day") {
+    if (!state.ownerMode) return;
+    const value = Number(target.value || 0);
+    if (!state.sheet) return;
+    state.sheet.maxDay = value;
+    state.sheet.maxTotal = value;
+    if (state.currentSheetId) {
+      const sheetIndex = state.sheets.findIndex((item) => item.id === state.currentSheetId);
+      if (sheetIndex !== -1) {
+        state.sheets[sheetIndex] = {
+          ...state.sheets[sheetIndex],
+          maxDay: value,
+          maxTotal: value
+        };
+        persistState();
+      }
+    }
+  }
+
+  if (target instanceof HTMLInputElement && target.id === "max-night") {
+    if (!state.ownerMode) return;
+    const value = Number(target.value || 0);
+    if (!state.sheet) return;
+    state.sheet.maxNight = value;
+    if (state.currentSheetId) {
+      const sheetIndex = state.sheets.findIndex((item) => item.id === state.currentSheetId);
+      if (sheetIndex !== -1) {
+        state.sheets[sheetIndex] = {
+          ...state.sheets[sheetIndex],
+          maxNight: value
+        };
+        persistState();
+      }
+    }
+  }
+
   if (target instanceof HTMLSelectElement && target.id === "availability-select") {
     const panel = target.closest(".settings-panel");
     if (!panel) return;
@@ -2327,7 +2383,10 @@ document.body.addEventListener("submit", (event) => {
         savedAssignments: [],
         savedFixedCells: [],
         savedRequiredDay: [],
-        savedRequiredNight: []
+        savedRequiredNight: [],
+        maxDay: 20,
+        maxNight: 10,
+        maxTotal: 20
       };
       state.sheets = [newSheet, ...state.sheets.filter((item) => item.id !== sheetId)];
       persistState();
@@ -2338,7 +2397,10 @@ document.body.addEventListener("submit", (event) => {
         groupName: state.selectedGroup,
         days: buildDays(year, month),
         warnings: [],
-        generatedAt: new Date()
+        generatedAt: new Date(),
+        maxDay: 20,
+        maxNight: 10,
+        maxTotal: 20
       };
       state.shiftPreferences = state.staff.map(() =>
         Array(state.sheet.days.length).fill("")

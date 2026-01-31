@@ -227,6 +227,29 @@ body {
   cursor: pointer;
 }
 
+.shift-limit-controls {
+  display: grid;
+  gap: 8px;
+}
+
+.shift-limit-controls label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.shift-limit-controls input {
+  width: 80px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid #cbd5f5;
+  background: #ffffff;
+  font-size: 13px;
+}
+
 .url-block {
   display: grid;
   gap: 6px;
