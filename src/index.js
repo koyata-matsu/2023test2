@@ -1941,6 +1941,28 @@ const applyAssignments = ({ randomize } = {}) => {
         day.index
       );
     }
+    if (nightCount < day.requiredNight) {
+      const columnCells = cells.filter(
+        (cell) => Number(cell.dataset.col) === day.index
+      );
+      const anyNight = [];
+      columnCells.forEach((cell) => {
+        const rowIndex = Number(cell.dataset.row);
+        const person = state.staff[rowIndex];
+        if (!person) return;
+        if (!isStaffAvailableForDay(person, day)) return;
+        const value = state.shiftPreferences?.[rowIndex]?.[day.index] || "";
+        if (value === "off") return;
+        anyNight.push({ cell, rowIndex });
+      });
+      nightCount += assignRelaxed(
+        anyNight,
+        day.requiredNight - nightCount,
+        "●",
+        "night",
+        day.index
+      );
+    }
     assignedNights.set(day.index, nightCount);
   });
 
