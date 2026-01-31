@@ -1658,7 +1658,7 @@ const applyAssignments = ({ randomize } = {}) => {
     return Number.isFinite(number) && number >= 0 ? number : null;
   };
 
-  const isOverMax = (rowIndex, shift) => {
+  const meetsLegacyMax = (rowIndex, shift) => {
     const limits = staffLimits[rowIndex];
     if (!limits) return false;
     if (shift === "day") {
@@ -1667,6 +1667,22 @@ const applyAssignments = ({ randomize } = {}) => {
     }
     const max = parseLimit(limits.nightMax);
     return max !== null && nightCounts[rowIndex] >= max;
+  };
+
+  const meetsCombinedMax = (rowIndex, shift) => {
+    const dayCount = dayCounts[rowIndex];
+    const nightCount = nightCounts[rowIndex];
+    const weightedTotal = nightCount * 2 + dayCount;
+    if (shift === "night") {
+      if (nightCount >= 10) return true;
+      return weightedTotal + 2 > 20;
+    }
+    if (dayCount >= 20) return true;
+    return weightedTotal + 1 > 20;
+  };
+
+  const isOverMax = (rowIndex, shift) => {
+    return meetsLegacyMax(rowIndex, shift) || meetsCombinedMax(rowIndex, shift);
   };
 
   const isShiftTypeAllowed = (rowIndex, shift) => {
@@ -1729,10 +1745,16 @@ const applyAssignments = ({ randomize } = {}) => {
 
     const assign = (cellsToUse, required, label, shift) => {
       let count = 0;
+      const assignedNightWards = new Set();
       const sortedCandidates = sortCandidates(cellsToUse, shift);
       for (const entry of sortedCandidates) {
         if (count >= required) break;
         if (isOverMax(entry.rowIndex, shift)) continue;
+        if (shift === "night") {
+          const ward = state.staff[entry.rowIndex]?.ward;
+          if (ward && assignedNightWards.has(ward)) continue;
+          if (ward) assignedNightWards.add(ward);
+        }
         const assignedLabel = entry.cell.querySelector(".assigned-shift");
         if (assignedLabel && assignedLabel.textContent) continue;
         assignedLabel.textContent = label;
@@ -1752,9 +1774,15 @@ const applyAssignments = ({ randomize } = {}) => {
     };
 
     const assignExtras = (cellsToUse, label, shift) => {
+      const assignedNightWards = new Set();
       const sortedCandidates = sortCandidates(cellsToUse, shift);
       for (const entry of sortedCandidates) {
         if (isOverMax(entry.rowIndex, shift)) continue;
+        if (shift === "night") {
+          const ward = state.staff[entry.rowIndex]?.ward;
+          if (ward && assignedNightWards.has(ward)) continue;
+          if (ward) assignedNightWards.add(ward);
+        }
         const assignedLabel = entry.cell.querySelector(".assigned-shift");
         if (assignedLabel && assignedLabel.textContent) continue;
         assignedLabel.textContent = label;
