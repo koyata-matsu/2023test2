@@ -301,6 +301,7 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
   const dayWeekdays = state.sheet.days.map((day) => day.weekday);
   const staffLimits = state.staff.map((person) => ({
     name: person.name,
+    shiftType: person.shiftType,
     dayMin: person.dayMin,
     dayMax: person.dayMax,
     nightMin: person.nightMin,
@@ -310,8 +311,9 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
     availabilityType: person.availabilityType,
     availableWeekdays: person.availableWeekdays
   }));
+  const shiftPreferences = state.shiftPreferences;
   const sheetId = state.currentSheetId;
-          const rows = state.staff
+  const rows = state.staff
     .map((person, rowIndex) => {
       const cells = state.sheet.days
         .map((day) => {
@@ -475,6 +477,7 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
           const dayWeekdays = ${JSON.stringify(dayWeekdays)};
           const staffLimits = ${JSON.stringify(staffLimits)};
           const staffAvailability = ${JSON.stringify(staffAvailability)};
+          const shiftPreferences = ${JSON.stringify(shiftPreferences)};
           const fixedDays = new Set(${JSON.stringify(Array.from(fixedSet))});
           const baseFixedDays = new Set(${JSON.stringify(Array.from(baseFixedDays))});
           const sheetId = ${JSON.stringify(sheetId)};
@@ -553,6 +556,81 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
             return { dayCounts, nightCounts, rowCounts };
           };
 
+          const applyNightNextDay = (target) => {
+            if (target.value !== "●") return;
+            const cell = target.closest('td');
+            if (!cell) return;
+            const row = target.closest('tr');
+            if (!row) return;
+            const colIndex = Number(cell.dataset.col);
+            const nextCell = row.querySelector(\`td[data-col="\${colIndex + 1}"] select[data-action="edit-cell"]\`);
+            if (!nextCell || nextCell.disabled) return;
+            nextCell.value = "※";
+          };
+
+          const isStaffAvailableForDay = (rowIndex, colIndex) => {
+            const availability = staffAvailability[rowIndex];
+            if (!availability) return true;
+            const weekday = dayWeekdays[colIndex];
+            if (availability.availabilityType === "weekday") {
+              return weekday !== "土" && weekday !== "日";
+            }
+            if (availability.availabilityType === "specific") {
+              return (
+                Array.isArray(availability.availableWeekdays) &&
+                availability.availableWeekdays.includes(weekday)
+              );
+            }
+            return true;
+          };
+
+          const isShiftTypeAllowed = (rowIndex, shift) => {
+            const type = staffLimits[rowIndex]?.shiftType;
+            if (shift === "day") return type !== "夜専";
+            if (shift === "night") return type !== "昼専";
+            return true;
+          };
+
+          const buildShortageReasons = (colIndex, rowCounts) => {
+            const reasons = {
+              day: { available: 0, off: 0, unavailable: 0, shiftType: 0, maxed: 0 },
+              night: { available: 0, off: 0, unavailable: 0, shiftType: 0, maxed: 0 }
+            };
+            staffAvailability.forEach((_, rowIndex) => {
+              const isOff = shiftPreferences?.[rowIndex]?.[colIndex] === "off";
+              if (isOff) {
+                reasons.day.off += 1;
+                reasons.night.off += 1;
+                return;
+              }
+              if (!isStaffAvailableForDay(rowIndex, colIndex)) {
+                reasons.day.unavailable += 1;
+                reasons.night.unavailable += 1;
+                return;
+              }
+              const counts = rowCounts[rowIndex] || { dayCount: 0, nightCount: 0 };
+              const dayMax = getNumeric(staffLimits[rowIndex]?.dayMax);
+              const nightMax = getNumeric(staffLimits[rowIndex]?.nightMax);
+
+              if (!isShiftTypeAllowed(rowIndex, "day")) {
+                reasons.day.shiftType += 1;
+              } else if (dayMax !== null && counts.dayCount >= dayMax) {
+                reasons.day.maxed += 1;
+              } else {
+                reasons.day.available += 1;
+              }
+
+              if (!isShiftTypeAllowed(rowIndex, "night")) {
+                reasons.night.shiftType += 1;
+              } else if (nightMax !== null && counts.nightCount >= nightMax) {
+                reasons.night.maxed += 1;
+              } else {
+                reasons.night.available += 1;
+              }
+            });
+            return reasons;
+          };
+
           const updateWarnings = () => {
             const { dayCounts, nightCounts, rowCounts } = collectCounts();
             const warnings = [];
@@ -568,7 +646,14 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
                 shortage
               });
               if (shortage) {
+                const reasons = buildShortageReasons(index, rowCounts);
                 warnings.push(\`\${dayLabels[index]}: 日勤 \${dayCounts[index]}/\${required}, 夜勤 \${nightCounts[index]}/\${requiredNight[index]} が不足\`);
+                warnings.push(
+                  \`理由(日勤): 勤務可能\${reasons.day.available}名 / 休み希望\${reasons.day.off}名 / 曜日不可\${reasons.day.unavailable}名 / 勤務タイプ不可\${reasons.day.shiftType}名 / 上限到達\${reasons.day.maxed}名\`
+                );
+                warnings.push(
+                  \`理由(夜勤): 勤務可能\${reasons.night.available}名 / 休み希望\${reasons.night.off}名 / 曜日不可\${reasons.night.unavailable}名 / 勤務タイプ不可\${reasons.night.shiftType}名 / 上限到達\${reasons.night.maxed}名\`
+                );
               }
             });
             staffLimits.forEach((limit, index) => {
@@ -597,34 +682,6 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
                 : '<li>現在、エラーはありません。</li>';
             }
             currentWarnings = warnings;
-          };
-
-          const applyNightNextDay = (target) => {
-            if (target.value !== "●") return;
-            const cell = target.closest('td');
-            if (!cell) return;
-            const row = target.closest('tr');
-            if (!row) return;
-            const colIndex = Number(cell.dataset.col);
-            const nextCell = row.querySelector(\`td[data-col="\${colIndex + 1}"] select[data-action="edit-cell"]\`);
-            if (!nextCell || nextCell.disabled) return;
-            nextCell.value = "※";
-          };
-
-          const isStaffAvailableForDay = (rowIndex, colIndex) => {
-            const availability = staffAvailability[rowIndex];
-            if (!availability) return true;
-            const weekday = dayWeekdays[colIndex];
-            if (availability.availabilityType === "weekday") {
-              return weekday !== "土" && weekday !== "日";
-            }
-            if (availability.availabilityType === "specific") {
-              return (
-                Array.isArray(availability.availableWeekdays) &&
-                availability.availableWeekdays.includes(weekday)
-              );
-            }
-            return true;
           };
 
           const enforceNightRests = () => {
