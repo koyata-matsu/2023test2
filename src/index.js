@@ -1499,7 +1499,6 @@ const renderApp = () => {
     ${content}
     ${renderSettingsDialog()}
     ${renderSheetDialog()}
-    ${renderWarningDialog()}
     ${renderConfirmDialog()}
   `;
 };
@@ -1555,13 +1554,8 @@ window.saveShiftResult = ({ sheetId, assignments, fixedCells, requiredDay, requi
 };
 
 window.notifyShiftSaved = () => {
-  state.warningMessage = "保存が完了しました。シフト表に戻ります。";
   state.view = "sheet";
   renderApp();
-  const dialog = document.querySelector(".warning-dialog");
-  if (dialog instanceof HTMLDialogElement) {
-    dialog.showModal();
-  }
 };
 
 const resetSavedSheet = (sheetId) => {
