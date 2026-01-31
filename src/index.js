@@ -160,6 +160,7 @@ const state = {
   groupDraftName: "",
   currentSheetId: null,
   fixedDays: new Set(),
+  fixedCells: new Set(),
   blockedDays: new Set(),
   shiftPreferences: [],
   assignments: [],
@@ -293,8 +294,7 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
   const newWindow = targetWindow ?? window.open("", "_blank");
   if (!newWindow) return;
   newWindow.location.href = `about:blank#${versionLabel}`;
-  const fixedSet = new Set(state.fixedDays);
-  const baseFixedDays = new Set(state.fixedDays);
+  const fixedCells = new Set(state.fixedCells ?? []);
   const requiredDay = state.sheet.days.map((day) => day.requiredDay);
   const requiredNight = state.sheet.days.map((day) => day.requiredNight);
   const dayLabels = state.sheet.days.map((day) => `${day.dateLabel}(${day.weekday})`);
@@ -322,25 +322,23 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
           const label = off ? "休" : assignment;
           return `
             <td data-row="${rowIndex}" data-col="${day.index}" style="border:1px solid #d1d5db;padding:6px;text-align:center;">
-              <select data-action="edit-cell" ${fixedSet.has(day.index) ? "disabled" : ""}>
+              <div style="display:flex;flex-direction:column;gap:4px;align-items:center;">
+                <button class="cell-fix-toggle" data-row="${rowIndex}" data-col="${day.index}">固定</button>
+                <select data-action="edit-cell">
                 <option value="" ${label === "" ? "selected" : ""}></option>
                 <option value="○" ${label === "○" ? "selected" : ""}>○</option>
                 <option value="●" ${label === "●" ? "selected" : ""}>●</option>
                 <option value="※" ${label === "※" ? "selected" : ""}>※</option>
                 <option value="休" ${label === "休" ? "selected" : ""}>休み</option>
-              </select>
+                </select>
+              </div>
             </td>
           `;
         })
         .join("");
       return `
         <tr>
-          <th style="border:1px solid #d1d5db;padding:6px;text-align:left;">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-              <span>${person.name}</span>
-              <button class="row-fix-toggle" data-row="${rowIndex}">固定</button>
-            </div>
-          </th>
+          <th style="border:1px solid #d1d5db;padding:6px;text-align:left;">${person.name}</th>
           ${cells}
           <td class="summary-col" data-summary="${rowIndex}" style="border:1px solid #d1d5db;padding:6px;text-align:center;">-</td>
         </tr>
@@ -358,7 +356,7 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
                 <div class="weekday">${day.weekday}</div>
                 <div class="required-counts">日:${day.requiredDay} 夜:${day.requiredNight}</div>
               </div>
-              <button class="fix-toggle" data-col="${day.index}">固定</button>
+              
             </div>
           </th>
         `;
@@ -374,23 +372,20 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
           table { border-collapse: collapse; width: 100%; }
           th { background: #f8fafc; }
           th.shortage-col, td.shortage-col { background: #fee2e2; }
-          th.fixed-row, td.fixed-row { background: #fef08a; }
+          td.fixed-cell { background: #fef08a; }
           .header-cell { display: flex; flex-direction: column; gap: 6px; }
           .header-cell .weekday { font-size: 12px; color: #64748b; }
           .header-cell .required-counts { font-size: 11px; color: #475569; }
-          .fix-toggle,
-          .row-fix-toggle {
+          .cell-fix-toggle {
             border: 1px solid #cbd5f5;
             background: #fff;
             border-radius: 999px;
             font-size: 12px;
-            padding: 2px 8px;
+            padding: 2px 6px;
             cursor: pointer;
           }
-          .fix-toggle.active { background: #f59e0b; color: #1f2937; border-color: #f59e0b; }
-          .fix-toggle[disabled] { opacity: 0.6; cursor: not-allowed; }
-          .row-fix-toggle.active { background: #f59e0b; color: #1f2937; border-color: #f59e0b; }
-          .row-fix-toggle[disabled] { opacity: 0.6; cursor: not-allowed; }
+          .cell-fix-toggle.active { background: #f59e0b; color: #1f2937; border-color: #f59e0b; }
+          .cell-fix-toggle[disabled] { opacity: 0.6; cursor: not-allowed; }
           .legend { display: flex; gap: 12px; margin: 12px 0; font-size: 12px; }
           .legend-item { display: flex; align-items: center; gap: 6px; }
           .legend-swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid #e2e8f0; }
@@ -486,10 +481,8 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
           const staffLimits = ${JSON.stringify(staffLimits)};
           const staffAvailability = ${JSON.stringify(staffAvailability)};
           const shiftPreferences = ${JSON.stringify(shiftPreferences)};
-          const fixedDays = new Set(${JSON.stringify(Array.from(fixedSet))});
-          const baseFixedDays = new Set(${JSON.stringify(Array.from(baseFixedDays))});
+          const fixedCells = new Set(${JSON.stringify(Array.from(fixedCells))});
           const sheetId = ${JSON.stringify(sheetId)};
-          const fixedRows = new Set();
           let currentWarnings = [];
 
           const getNumeric = (value) => {
@@ -511,40 +504,23 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
             cells.forEach((cell) => applyClasses(cell));
           };
 
-          const updateFixedButtonState = (index) => {
-            const button = document.querySelector(\`.fix-toggle[data-col="\${index}"]\`);
-            if (!button) return;
-            const isFixed = fixedDays.has(index);
-            button.classList.toggle('active', isFixed);
-            button.textContent = isFixed ? '固定中' : '固定';
-            button.disabled = baseFixedDays.has(index);
-            const cells = document.querySelectorAll(\`tbody td[data-col="\${index}"] select[data-action="edit-cell"]\`);
-            cells.forEach((select) => {
-              const cell = select.closest('td');
-              const rowIndex = cell ? Number(cell.dataset.row) : null;
-              const isRowFixed = rowIndex !== null && fixedRows.has(rowIndex);
-              select.disabled = isFixed || isRowFixed;
-            });
-          };
+          const cellKey = (rowIndex, colIndex) => \`\${rowIndex}-\${colIndex}\`;
 
-          const updateRowFixedState = (rowIndex) => {
-            const button = document.querySelector(\`.row-fix-toggle[data-row="\${rowIndex}"]\`);
-            if (!button) return;
-            const isFixed = fixedRows.has(rowIndex);
-            button.classList.toggle('active', isFixed);
-            button.textContent = isFixed ? '固定中' : '固定';
-            const row = button.closest('tr');
-            if (!row) return;
-            row.querySelectorAll('th, td').forEach((cell) => {
-              cell.classList.toggle('fixed-row', isFixed);
-            });
-            const selects = row.querySelectorAll('select[data-action="edit-cell"]');
-            selects.forEach((select) => {
-              const cell = select.closest('td');
-              const colIndex = cell ? Number(cell.dataset.col) : null;
-              const isColFixed = colIndex !== null && fixedDays.has(colIndex);
-              select.disabled = isFixed || isColFixed;
-            });
+          const updateCellFixedState = (rowIndex, colIndex) => {
+            const key = cellKey(rowIndex, colIndex);
+            const cell = document.querySelector(\`td[data-row="\${rowIndex}"][data-col="\${colIndex}"]\`);
+            if (!cell) return;
+            const button = cell.querySelector('.cell-fix-toggle');
+            const select = cell.querySelector('select[data-action="edit-cell"]');
+            const isFixed = fixedCells.has(key);
+            if (button) {
+              button.classList.toggle('active', isFixed);
+              button.textContent = isFixed ? '固定中' : '固定';
+            }
+            if (select) {
+              select.disabled = isFixed;
+            }
+            cell.classList.toggle('fixed-cell', isFixed);
           };
 
           const updateRowSummary = (row) => {
@@ -663,11 +639,7 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
             const { dayCounts, nightCounts, rowCounts } = collectCounts();
             const warnings = [];
             requiredDay.forEach((required, index) => {
-              if (baseFixedDays.has(index)) {
-                fixedDays.add(index);
-              }
               const shortage =
-                !fixedDays.has(index) &&
                 (dayCounts[index] < required || nightCounts[index] < requiredNight[index]);
               updateColumnClasses(index, {
                 shortage
@@ -681,6 +653,9 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
                 warnings.push(
                   \`理由(夜勤): 勤務可能\${reasons.night.available}名 / 休み希望\${reasons.night.off}名 / 曜日不可\${reasons.night.unavailable}名 / 勤務タイプ不可\${reasons.night.shiftType}名 / 上限到達\${reasons.night.maxed}名\`
                 );
+                if (reasons.day.available > 0 || reasons.night.available > 0) {
+                  warnings.push("備考: 勤務可能な人がいるので、割り当てを追加してください。");
+                }
               }
             });
             staffLimits.forEach((limit, index) => {
@@ -756,7 +731,7 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
               opener.saveShiftResult({
                 sheetId,
                 assignments,
-                fixedDays: Array.from(fixedDays),
+                fixedCells: Array.from(fixedCells),
                 requiredDay,
                 requiredNight
               });
@@ -792,36 +767,25 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
               opener.openShiftVersionWindow(versionLabel, nextWindow);
               return;
             }
-            if (target.matches('.row-fix-toggle')) {
+            if (target.matches('.cell-fix-toggle')) {
               const rowIndex = Number(target.dataset.row);
-              if (Number.isNaN(rowIndex)) return;
-              if (fixedRows.has(rowIndex)) {
-                fixedRows.delete(rowIndex);
+              const colIndex = Number(target.dataset.col);
+              if (Number.isNaN(rowIndex) || Number.isNaN(colIndex)) return;
+              const key = cellKey(rowIndex, colIndex);
+              if (fixedCells.has(key)) {
+                fixedCells.delete(key);
               } else {
-                fixedRows.add(rowIndex);
+                fixedCells.add(key);
               }
-              updateRowFixedState(rowIndex);
+              updateCellFixedState(rowIndex, colIndex);
               updateWarnings();
-              return;
             }
-            if (!target.matches('.fix-toggle')) return;
-            const index = Number(target.dataset.col);
-            if (Number.isNaN(index)) return;
-            if (baseFixedDays.has(index)) return;
-            if (fixedDays.has(index)) {
-              fixedDays.delete(index);
-            } else {
-              fixedDays.add(index);
-            }
-            updateFixedButtonState(index);
-            updateWarnings();
           });
 
-          requiredDay.forEach((_, index) => {
-            updateFixedButtonState(index);
-          });
-          staffLimits.forEach((_, rowIndex) => {
-            updateRowFixedState(rowIndex);
+          requiredDay.forEach((_, colIndex) => {
+            staffLimits.forEach((_, rowIndex) => {
+              updateCellFixedState(rowIndex, colIndex);
+            });
           });
           enforceNightRests();
           updateWarnings();
@@ -1366,7 +1330,7 @@ const renderAppPreserveScroll = () => {
   window.scrollTo(windowScrollX, windowScrollY);
 };
 
-window.saveShiftResult = ({ sheetId, assignments, fixedDays, requiredDay, requiredNight }) => {
+window.saveShiftResult = ({ sheetId, assignments, fixedCells, requiredDay, requiredNight }) => {
   if (!sheetId) return;
   const sheetIndex = state.sheets.findIndex((item) => item.id === sheetId);
   if (sheetIndex === -1) return;
@@ -1374,7 +1338,7 @@ window.saveShiftResult = ({ sheetId, assignments, fixedDays, requiredDay, requir
   const updatedSheet = {
     ...sheet,
     savedAssignments: assignments,
-    savedFixedDays: fixedDays,
+    savedFixedCells: fixedCells,
     savedRequiredDay: requiredDay,
     savedRequiredNight: requiredNight,
     generatedAt: new Date()
@@ -1386,7 +1350,7 @@ window.saveShiftResult = ({ sheetId, assignments, fixedDays, requiredDay, requir
   ];
   if (state.currentSheetId === sheetId && state.sheet) {
     state.assignments = assignments;
-    state.fixedDays = new Set(fixedDays);
+    state.fixedCells = new Set(fixedCells ?? []);
     state.sheet.days.forEach((day, index) => {
       if (Array.isArray(requiredDay) && requiredDay[index] !== undefined) {
         day.requiredDay = requiredDay[index];
@@ -1409,7 +1373,7 @@ const resetSavedSheet = (sheetId) => {
   const updatedSheet = {
     ...sheet,
     savedAssignments: [],
-    savedFixedDays: [],
+    savedFixedCells: [],
     generatedAt: null
   };
   state.sheets = [
@@ -1421,6 +1385,7 @@ const resetSavedSheet = (sheetId) => {
     state.assignments = state.staff.map(() =>
       Array(state.sheet.days.length).fill("")
     );
+    state.fixedCells = new Set();
     state.fixedDays = new Set();
     state.blockedDays = new Set();
     state.sheet.warnings = [];
@@ -1456,6 +1421,7 @@ const resetState = () => {
   state.groupDraftName = "";
   state.currentSheetId = null;
   state.fixedDays = new Set();
+  state.fixedCells = new Set();
   state.blockedDays = new Set();
   state.shiftPreferences = [];
   state.assignments = [];
@@ -1692,9 +1658,12 @@ const openSheetFromList = (sheetId) => {
       Array(state.sheet.days.length).fill("")
     );
   }
-  if (Array.isArray(sheet.savedFixedDays)) {
-    state.fixedDays = new Set(sheet.savedFixedDays);
+  if (Array.isArray(sheet.savedFixedCells)) {
+    state.fixedCells = new Set(sheet.savedFixedCells);
+  } else {
+    state.fixedCells = new Set();
   }
+  state.fixedDays = new Set();
   state.blockedDays = new Set();
   state.view = "sheet";
   renderApp();
@@ -1974,7 +1943,7 @@ document.body.addEventListener("submit", (event) => {
         groupName: state.selectedGroup,
         generatedAt: new Date(),
         savedAssignments: [],
-        savedFixedDays: [],
+        savedFixedCells: [],
         savedRequiredDay: [],
         savedRequiredNight: []
       };
