@@ -1873,6 +1873,13 @@ const applyAssignments = ({ randomize, silent } = {}) => {
     return !isRestDay(rowIndex, dayIndex);
   };
 
+  const hasAdjacentNight = (rowIndex, dayIndex) => {
+    return (
+      state.assignments?.[rowIndex]?.[dayIndex - 1] === "●" ||
+      state.assignments?.[rowIndex]?.[dayIndex + 1] === "●"
+    );
+  };
+
   const buildAvailable = (day) => {
     const columnCells = cells.filter(
       (cell) => Number(cell.dataset.col) === day.index
@@ -1897,6 +1904,7 @@ const applyAssignments = ({ randomize, silent } = {}) => {
           state.assignments?.[rowIndex]?.[day.index + 1] &&
           state.assignments[rowIndex][day.index + 1] !== "※"
         ) &&
+        !hasAdjacentNight(rowIndex, day.index) &&
         lastNightDay[rowIndex] !== day.index - 1
       ) {
         availableNight.push({ cell, rowIndex });
@@ -1935,6 +1943,7 @@ const applyAssignments = ({ randomize, silent } = {}) => {
       if (count >= required) break;
       if (isOverMax(entry.rowIndex, shift)) continue;
       if (shift === "night" && lastNightDay[entry.rowIndex] === dayIndex - 1) continue;
+      if (shift === "night" && hasAdjacentNight(entry.rowIndex, dayIndex)) continue;
       if (
         shift === "night" &&
         state.assignments?.[entry.rowIndex]?.[dayIndex + 1] &&
@@ -1982,6 +1991,7 @@ const applyAssignments = ({ randomize, silent } = {}) => {
       if (count >= required) break;
       if (isOverMax(entry.rowIndex, shift)) continue;
       if (shift === "night" && lastNightDay[entry.rowIndex] === dayIndex - 1) continue;
+      if (shift === "night" && hasAdjacentNight(entry.rowIndex, dayIndex)) continue;
       if (shift === "night") {
         const ward = state.staff[entry.rowIndex]?.ward;
         if (ward && assignedNightWards.has(ward)) continue;
@@ -2019,6 +2029,7 @@ const applyAssignments = ({ randomize, silent } = {}) => {
     for (const entry of sortedCandidates) {
       if (isOverMax(entry.rowIndex, shift)) continue;
       if (shift === "night" && lastNightDay[entry.rowIndex] === dayIndex - 1) continue;
+      if (shift === "night" && hasAdjacentNight(entry.rowIndex, dayIndex)) continue;
       if (shift === "night") {
         const ward = state.staff[entry.rowIndex]?.ward;
         if (ward && assignedNightWards.has(ward)) continue;
@@ -2104,6 +2115,7 @@ const applyAssignments = ({ randomize, silent } = {}) => {
         if (!isStaffAvailableForDay(person, day)) return;
         const value = state.shiftPreferences?.[rowIndex]?.[day.index] || "";
         if (value === "off") return;
+        if (hasAdjacentNight(rowIndex, day.index)) return;
         if (isShiftTypeAllowed(rowIndex, "night")) {
           relaxedNight.push({ cell, rowIndex });
         }
@@ -2129,6 +2141,7 @@ const applyAssignments = ({ randomize, silent } = {}) => {
         if (!isStaffAvailableForDay(person, day)) return;
         const value = state.shiftPreferences?.[rowIndex]?.[day.index] || "";
         if (value === "off") return;
+        if (hasAdjacentNight(rowIndex, day.index)) return;
         anyNight.push({ cell, rowIndex });
       });
       nightCount += assignRelaxed(
