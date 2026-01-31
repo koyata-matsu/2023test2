@@ -1869,6 +1869,29 @@ const applyAssignments = ({ randomize } = {}) => {
     return count;
   };
 
+  const assignRelaxedAnyWard = (cellsToUse, required, label, shift, dayIndex) => {
+    let count = 0;
+    const sortedCandidates = sortCandidates(cellsToUse, shift);
+    for (const entry of sortedCandidates) {
+      if (count >= required) break;
+      const assignedLabel = entry.cell.querySelector(".assigned-shift");
+      if (assignedLabel && assignedLabel.textContent) continue;
+      assignedLabel.textContent = label;
+      entry.cell.classList.add("assigned");
+      const rowIndex = entry.rowIndex;
+      if (!Number.isNaN(rowIndex)) {
+        state.assignments[rowIndex][dayIndex] = label;
+      }
+      if (shift === "day") {
+        dayCounts[rowIndex] += 1;
+      } else {
+        nightCounts[rowIndex] += 1;
+      }
+      count += 1;
+    }
+    return count;
+  };
+
   const assignExtras = (cellsToUse, label, shift, dayIndex) => {
     const assignedNightWards = new Set();
     const sortedCandidates = sortCandidates(cellsToUse, shift);
@@ -1955,7 +1978,7 @@ const applyAssignments = ({ randomize } = {}) => {
         if (value === "off") return;
         anyNight.push({ cell, rowIndex });
       });
-      nightCount += assignRelaxed(
+      nightCount += assignRelaxedAnyWard(
         anyNight,
         day.requiredNight - nightCount,
         "●",
