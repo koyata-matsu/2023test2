@@ -8,7 +8,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   },
@@ -19,7 +19,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   },
@@ -30,7 +30,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   },
@@ -41,7 +41,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   },
@@ -52,7 +52,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   },
@@ -63,7 +63,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   },
@@ -74,7 +74,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   },
@@ -85,7 +85,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   },
@@ -96,7 +96,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   },
@@ -107,7 +107,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   }
@@ -130,19 +130,17 @@ const createEmptyStaff = () => ({
   availabilityType: "all",
   availableWeekdays: [],
   dayMin: "",
-  dayMax: "25",
+  dayMax: "20",
   nightMin: "",
   nightMax: "11"
 });
 
 const state = {
-  view: "login",
+  view: "dashboard",
   owner: {
     email: "",
     password: ""
   },
-  authToken: "",
-  apiStatus: "unknown",
   staff: structuredClone(initialStaff),
   ownerMode: true,
   sheet: null,
@@ -181,8 +179,9 @@ const buildDays = (year, month) => {
   });
 };
 
-const formatTimestamp = (date) => {
-  if (!(date instanceof Date)) return "";
+const formatTimestamp = (value) => {
+  const date = value instanceof Date ? value : value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "";
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
@@ -287,64 +286,6 @@ const getShortageDays = () => {
 };
 
 const STORAGE_KEY = "shiftAppData";
-const AUTH_TOKEN_KEY = "shiftAuthToken";
-const API_BASE = window.SHIFT_API_BASE || "http://localhost:3001";
-
-const setAuthToken = (token) => {
-  state.authToken = token || "";
-  if (token) {
-    localStorage.setItem(AUTH_TOKEN_KEY, token);
-  } else {
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-  }
-};
-
-const apiRequest = async (path, options = {}) => {
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options.headers || {})
-  };
-  if (state.authToken) {
-    headers.Authorization = `Bearer ${state.authToken}`;
-  }
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers
-  });
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    const errorMessage = errorBody.error || "サーバーエラーが発生しました。";
-    throw new Error(errorMessage);
-  }
-  return response.json();
-};
-
-const checkApiHealth = async () => {
-  try {
-    const response = await fetch(`${API_BASE}/api/health`);
-    state.apiStatus = response.ok ? "online" : "error";
-  } catch (error) {
-    state.apiStatus = "offline";
-  }
-};
-
-const getApiStatusLabel = () => {
-  if (state.apiStatus === "online") return "サーバー接続: OK";
-  if (state.apiStatus === "offline") return "サーバー接続: 未接続";
-  if (state.apiStatus === "error") return "サーバー接続: エラー";
-  return "サーバー接続: 確認中";
-};
-
-const getApiStatusClass = () => {
-  if (state.apiStatus === "online") return "status-pill ok";
-  if (state.apiStatus === "offline") return "status-pill offline";
-  if (state.apiStatus === "error") return "status-pill error";
-  return "status-pill";
-};
-
-const getConnectionHelpMessage = () =>
-  "サーバーに接続できませんでした。公開サイトではAPIサーバーが必要です。npm run server を実行するか、SHIFT_API_BASE を正しいURLに設定してください。";
-
 const loadPersistedState = () => {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
@@ -355,48 +296,30 @@ const loadPersistedState = () => {
   };
 };
 
-const loadRemoteState = async () => {
-  if (!state.authToken) return null;
-  try {
-    return await apiRequest("/api/state");
-  } catch (error) {
-    state.warningMessage = "サーバーに接続できませんでした。ローカル保存で続行します。";
-    openDialog(".warning-dialog");
-    return null;
-  }
-};
-
 const persistState = () => {
   const payload = {
     groups: state.groups,
     sheets: state.sheets
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  if (state.authToken) {
-    apiRequest("/api/state", {
-      method: "PUT",
-      body: JSON.stringify(payload)
-    }).catch(() => {
-      state.warningMessage = "サーバーへの保存に失敗しました。";
-      openDialog(".warning-dialog");
-    });
-  }
 };
 
 const persistedState = loadPersistedState();
-const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
-if (storedToken) {
-  state.authToken = storedToken;
-}
 
-const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
+const openShiftVersionWindow = (
+  versionLabel,
+  targetWindow = null,
+  assignmentsOverride = null,
+  options = {}
+) => {
   if (!state.sheet) return;
   const newWindow = targetWindow ?? window.open("", "_blank");
   if (!newWindow) return;
   newWindow.location.href = `about:blank#${versionLabel}`;
-  const fixedCells = new Set(state.fixedCells ?? []);
-  const requiredDay = state.sheet.days.map((day) => day.requiredDay);
-  const requiredNight = state.sheet.days.map((day) => day.requiredNight);
+  const fixedCells = new Set(options.fixedCells ?? state.fixedCells ?? []);
+  const baseAssignments = assignmentsOverride ?? state.assignments;
+  const requiredDay = options.requiredDay ?? state.sheet.days.map((day) => day.requiredDay);
+  const requiredNight = options.requiredNight ?? state.sheet.days.map((day) => day.requiredNight);
   const dayLabels = state.sheet.days.map((day) => `${day.dateLabel}(${day.weekday})`);
   const dayWeekdays = state.sheet.days.map((day) => day.weekday);
   const staffLimits = state.staff.map((person) => ({
@@ -417,7 +340,7 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
     .map((person, rowIndex) => {
       const cells = state.sheet.days
         .map((day) => {
-          const assignment = state.assignments?.[rowIndex]?.[day.index] || "";
+          const assignment = baseAssignments?.[rowIndex]?.[day.index] || "";
           const off = state.shiftPreferences?.[rowIndex]?.[day.index] === "off";
           const label = off ? "休" : assignment;
           return `
@@ -437,8 +360,13 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
         })
         .join("");
       return `
-        <tr>
-          <th style="border:1px solid #d1d5db;padding:6px;text-align:left;">${person.name}</th>
+        <tr data-row="${rowIndex}">
+          <th class="name-cell" style="border:1px solid #d1d5db;padding:6px;text-align:left;">
+            <div class="name-cell-content">
+              <span>${person.name}</span>
+              <span class="row-counts" data-row-count="${rowIndex}">日:0 / 夜:0</span>
+            </div>
+          </th>
           ${cells}
           <td class="summary-col" data-summary="${rowIndex}" style="border:1px solid #d1d5db;padding:6px;text-align:center;">-</td>
         </tr>
@@ -455,6 +383,7 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
                 <div>${day.dateLabel}</div>
                 <div class="weekday">${day.weekday}</div>
                 <div class="required-counts">日:${day.requiredDay} 夜:${day.requiredNight}</div>
+                <div class="actual-counts" data-actual-col="${day.index}">日:0 夜:0</div>
               </div>
               
             </div>
@@ -468,14 +397,23 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
       <head>
         <title>シフト結果 ${versionLabel}</title>
         <style>
-          body { font-family: "Noto Sans JP", sans-serif; padding: 20px; }
-          table { border-collapse: collapse; width: 100%; }
+          body { font-family: "Noto Sans JP", sans-serif; padding: 20px; font-size: 16px; }
+          table { border-collapse: collapse; width: 100%; font-size: 15px; }
           th { background: #f8fafc; }
+          thead th { position: sticky; top: 0; z-index: 2; }
+          th.name-cell { position: sticky; left: 0; z-index: 3; background: #f8fafc; }
+          tbody th.name-cell { background: #fff; }
+          tbody th.name-cell { position: sticky; left: 0; z-index: 1; }
+          tbody td.summary-col { position: sticky; right: 0; z-index: 1; background: #f1f5f9; }
+          thead th.summary-col { position: sticky; right: 0; z-index: 4; background: #f1f5f9; }
           th.shortage-col, td.shortage-col { background: #fee2e2; }
           td.fixed-cell { background: #fef08a; }
           .header-cell { display: flex; flex-direction: column; gap: 6px; }
           .header-cell .weekday { font-size: 12px; color: #64748b; }
           .header-cell .required-counts { font-size: 11px; color: #475569; }
+          .header-cell .actual-counts { font-size: 11px; color: #1d4ed8; }
+          .name-cell-content { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+          .row-counts { font-size: 12px; color: #1d4ed8; white-space: nowrap; }
           .cell-fix-toggle {
             border: 1px solid #cbd5f5;
             background: #fff;
@@ -499,7 +437,7 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
             padding: 6px 12px;
             cursor: pointer;
           }
-          select { padding: 4px 6px; border-radius: 6px; border: 1px solid #cbd5f5; }
+          select { padding: 4px 6px; border-radius: 6px; border: 1px solid #cbd5f5; font-size: 16px; }
           .summary-col { background: #f1f5f9; }
           .warning-panel { margin-top: 16px; padding: 12px; border: 1px solid #fca5a5; border-radius: 8px; background: #fef2f2; }
           .warning-panel h2 { margin: 0 0 8px; font-size: 14px; }
@@ -546,12 +484,11 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
         <div class="shift-result-actions">
           <button id="save-shift">保存する</button>
           <button id="print-shift">印刷する</button>
-          <button id="regenerate-shift">作り直す</button>
         </div>
         <table>
           <thead>
             <tr>
-              <th style="border:1px solid #d1d5db;padding:6px;text-align:left;">氏名</th>
+              <th class="name-cell" style="border:1px solid #d1d5db;padding:6px;text-align:left;">氏名</th>
               ${headers}
               <th class="summary-col" style="border:1px solid #d1d5db;padding:6px;">合計</th>
             </tr>
@@ -634,6 +571,13 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
             const summary = row.querySelector('[data-summary]');
             if (summary) {
               summary.textContent = \`日:\${dayCount} / 夜:\${nightCount}\`;
+            }
+            const rowIndex = row.dataset.row;
+            if (rowIndex !== undefined) {
+              const rowCount = row.querySelector(\`[data-row-count="\${rowIndex}"]\`);
+              if (rowCount) {
+                rowCount.textContent = \`日:\${dayCount} / 夜:\${nightCount}\`;
+              }
             }
             return { dayCount, nightCount };
           };
@@ -775,6 +719,10 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
               updateColumnClasses(index, {
                 shortage
               });
+              const actualCell = document.querySelector(\`[data-actual-col="\${index}"]\`);
+              if (actualCell) {
+                actualCell.textContent = \`日:\${dayCounts[index]} 夜:\${nightCounts[index]}\`;
+              }
               if (shortage) {
                 const reasons = buildShortageReasons(index, rowCounts);
                 warnings.push(\`\${dayLabels[index]}: 日勤 \${dayCounts[index]}/\${required}, 夜勤 \${nightCounts[index]}/\${requiredNight[index]} が不足\`);
@@ -850,22 +798,22 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
             if (!(target instanceof HTMLButtonElement)) return;
             if (target.matches('#save-shift')) {
               const opener = window.opener;
-              if (!opener || typeof opener.saveShiftResult !== 'function') return;
+              if (!opener || typeof opener.saveShiftSnapshot !== 'function') return;
+              const name = window.prompt('保存名を入力してください');
+              if (!name) return;
               const rows = document.querySelectorAll('tbody tr');
               const assignments = Array.from(rows).map((row) => {
                 const selects = row.querySelectorAll('select[data-action="edit-cell"]');
                 return Array.from(selects).map((select) => select.value);
               });
-              opener.saveShiftResult({
+              opener.saveShiftSnapshot({
                 sheetId,
+                name,
                 assignments,
                 fixedCells: Array.from(fixedCells),
                 requiredDay,
                 requiredNight
               });
-              if (typeof opener.notifyShiftSaved === 'function') {
-                opener.notifyShiftSaved();
-              }
               window.close();
               return;
             }
@@ -887,16 +835,6 @@ const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
               const modal = document.getElementById('print-modal');
               if (modal) modal.classList.remove('is-open');
               window.print();
-              return;
-            }
-            if (target.matches('#regenerate-shift')) {
-              const opener = window.opener;
-              if (!opener || typeof opener.regenerateShiftVersion !== 'function') return;
-              const nextWindow = window.open('', '_blank');
-              const versionLabel = await opener.regenerateShiftVersion({ targetWindow: nextWindow });
-              if (!versionLabel && nextWindow) {
-                nextWindow.close();
-              }
               return;
             }
             if (target.matches('.cell-fix-toggle')) {
@@ -954,7 +892,7 @@ const renderSidePanel = () => `
           </label>
           <label>
             最大夜勤
-            <input id="max-night" type="number" min="0" value="${state.sheet?.maxNight ?? 10}" ${
+            <input id="max-night" type="number" min="0" value="${state.sheet?.maxNight ?? 11}" ${
               state.ownerMode ? "" : "disabled"
             } />
           </label>
@@ -987,84 +925,43 @@ const renderSidePanel = () => `
         }
         <p class="helper-text">固定した日付は変更されません。</p>
       </section>
+      <section class="shift-action">
+        <h2>リンク作成</h2>
+        <p class="helper-text">保存したシフトをここから開けます。</p>
+        <div class="link-list">
+          ${
+            state.currentSheetId
+              ? (() => {
+                  const sheet = state.sheets.find((item) => item.id === state.currentSheetId);
+                  const savedLinks = sheet?.savedLinks ?? [];
+                  if (savedLinks.length === 0) {
+                    return '<p class="helper-text">保存済みのシフトはありません。</p>';
+                  }
+                  return savedLinks
+                    .map(
+                      (item) => `
+                        <div class="sheet-card">
+                          <div>
+                            <p class="sheet-meta">保存: ${formatTimestamp(item.createdAt)}</p>
+                          </div>
+                          <div class="sheet-actions">
+                            <button class="ghost" data-action="open-saved-shift" data-id="${item.id}">
+                              ${item.name}
+                            </button>
+                          </div>
+                        </div>
+                      `
+                    )
+                    .join("");
+                })()
+              : '<p class="helper-text">シフト表を開くと保存一覧が表示されます。</p>'
+          }
+        </div>
+      </section>
     `
         : ""
     }
   </aside>
-`;
-
-const renderLogin = () => `
-  <div class="page login">
-    <header class="app-header">
-      <div>
-        <p class="eyebrow">バイトシフト調整</p>
-        <h1>ログイン</h1>
-      </div>
-      <span class="${getApiStatusClass()}">${getApiStatusLabel()}</span>
-    </header>
-    <section class="card">
-      <label>
-        メールアドレス
-        <input id="owner-email" type="email" placeholder="owner@example.com" value="${
-          state.owner.email
-        }" />
-      </label>
-      <label>
-        パスワード
-        <input id="owner-password" type="password" placeholder="8文字以上" value="${
-          state.owner.password
-        }" />
-      </label>
-      <div class="button-row">
-        <button class="primary" id="login-owner">ログイン</button>
-        <button class="ghost" id="go-register">新規登録</button>
-        <button class="ghost" id="enter-guest">公開モードで閲覧</button>
-      </div>
-      <p class="helper-text">
-        ログインできない場合は公開モードで閲覧できます（編集はできません）。
-      </p>
-      <p class="helper-text">
-        ${state.apiStatus === "offline" ? getConnectionHelpMessage() : ""}
-      </p>
-      <p class="helper-text">別端末でも使うにはサーバー接続が必要です。</p>
-    </section>
-  </div>
-`;
-
-const renderRegister = () => `
-  <div class="page login">
-    <header class="app-header">
-      <div>
-        <p class="eyebrow">バイトシフト調整</p>
-        <h1>新規登録</h1>
-      </div>
-      <div class="header-actions">
-        <span class="${getApiStatusClass()}">${getApiStatusLabel()}</span>
-        <button class="ghost" id="back-to-login">ログインへ戻る</button>
-      </div>
-    </header>
-    <section class="card">
-      <label>
-        メールアドレス
-        <input id="owner-email" type="email" placeholder="owner@example.com" value="${
-          state.owner.email
-        }" />
-      </label>
-      <label>
-        パスワード
-        <input id="owner-password" type="password" placeholder="8文字以上" value="${
-          state.owner.password
-        }" />
-      </label>
-      <div class="button-row">
-        <button class="primary" id="register-owner">登録する</button>
-      </div>
-      <p class="helper-text">
-        ${state.apiStatus === "offline" ? getConnectionHelpMessage() : ""}
-      </p>
-      <p class="helper-text">登録後、そのままログインして同期を開始します。</p>
-    </section>
-  </div>
 `;
 
 const renderStaffRows = () => {
@@ -1203,13 +1100,7 @@ const renderGroupList = () => `
     <header class="app-header">
       <div>
         <p class="eyebrow">グループ一覧</p>
-        <h1>${state.ownerMode ? state.owner.email || "シフト管理" : "公開モード"}</h1>
-      </div>
-      <div class="header-actions">
-        ${state.ownerMode
-          ? `<button class="ghost" id="logout">ログアウト</button>`
-          : `<button class="ghost" id="back-to-login">ログインへ戻る</button>`}
-        ${!state.ownerMode ? `<span class="mode-pill">閲覧専用</span>` : ""}
+        <h1>シフト管理</h1>
       </div>
     </header>
 
@@ -1224,11 +1115,7 @@ const renderGroupList = () => `
               state.ownerMode ? "" : "disabled"
             }>シフトシートを作成する</button>
           </div>
-          <span class="helper-text">${
-            state.ownerMode
-              ? "グループを選んで編集・シフト作成ができます。"
-              : "公開モードでは閲覧のみ可能です。編集にはログインが必要です。"
-          }</span>
+          <span class="helper-text">グループを選んで編集・シフト作成ができます。</span>
         </section>
 
         <section class="sheet-list">
@@ -1531,11 +1418,7 @@ const renderConfirmDialog = () => `
 
 const renderApp = () => {
   let content = "";
-  if (state.view === "login") {
-    content = renderLogin();
-  } else if (state.view === "register") {
-    content = renderRegister();
-  } else if (state.view === "group") {
+  if (state.view === "group") {
     content = renderGroupCreation();
   } else if (state.view === "dashboard") {
     content = renderDashboard();
@@ -1566,43 +1449,42 @@ const renderAppPreserveScroll = () => {
   window.scrollTo(windowScrollX, windowScrollY);
 };
 
-window.saveShiftResult = ({ sheetId, assignments, fixedCells, requiredDay, requiredNight }) => {
-  if (!sheetId) return;
+window.saveShiftSnapshot = ({
+  sheetId,
+  name,
+  assignments,
+  fixedCells,
+  requiredDay,
+  requiredNight
+}) => {
+  if (!sheetId || !name) return;
   const sheetIndex = state.sheets.findIndex((item) => item.id === sheetId);
   if (sheetIndex === -1) return;
   const sheet = state.sheets[sheetIndex];
+  const savedLinks = Array.isArray(sheet.savedLinks) ? sheet.savedLinks : [];
+  const entryId =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const snapshot = {
+    id: entryId,
+    name,
+    createdAt: new Date().toISOString(),
+    assignments,
+    fixedCells,
+    requiredDay,
+    requiredNight
+  };
   const updatedSheet = {
     ...sheet,
-    savedAssignments: assignments,
-    savedFixedCells: fixedCells,
-    savedRequiredDay: requiredDay,
-    savedRequiredNight: requiredNight,
-    generatedAt: new Date()
+    savedLinks: [snapshot, ...savedLinks]
   };
   state.sheets = [
     ...state.sheets.slice(0, sheetIndex),
     updatedSheet,
     ...state.sheets.slice(sheetIndex + 1)
   ];
-  if (state.currentSheetId === sheetId && state.sheet) {
-    state.assignments = assignments;
-    state.fixedCells = new Set(fixedCells ?? []);
-    state.sheet.days.forEach((day, index) => {
-      if (Array.isArray(requiredDay) && requiredDay[index] !== undefined) {
-        day.requiredDay = requiredDay[index];
-      }
-      if (Array.isArray(requiredNight) && requiredNight[index] !== undefined) {
-        day.requiredNight = requiredNight[index];
-      }
-    });
-    state.sheet.generatedAt = updatedSheet.generatedAt;
-  }
   persistState();
-  renderApp();
-};
-
-window.notifyShiftSaved = () => {
-  state.view = "sheet";
   renderApp();
 };
 
@@ -1652,35 +1534,6 @@ const closeDialog = (selector) => {
   }
 };
 
-const resetState = () => {
-  state.view = "login";
-  state.owner = { email: "", password: "" };
-  state.staff = structuredClone(initialStaff);
-  state.ownerMode = true;
-  state.sheet = null;
-  const persisted = loadPersistedState();
-  state.sheets = persisted?.sheets ?? [];
-  state.groups = persisted?.groups ?? [];
-  state.groupDraftName = "";
-  state.currentSheetId = null;
-  state.fixedDays = new Set();
-  state.fixedCells = new Set();
-  state.blockedDays = new Set();
-  state.shiftPreferences = [];
-  state.assignments = [];
-  state.shiftVersions = [];
-  state.warningMessage = "入力内容を確認してください。";
-  state.confirmMessage = "";
-  state.pendingShift = false;
-  state.loadingShift = false;
-  state.lastShiftAttempts = null;
-  state.lastShiftAttemptLimit = null;
-  state.lastShiftSucceeded = null;
-  state.lastShiftError = "";
-  state.selectedGroup = "";
-  renderApp();
-};
-
 const moveStaffRow = (rowIndex, direction) => {
   if (!Number.isFinite(rowIndex)) return;
   const targetIndex = rowIndex + direction;
@@ -1722,20 +1575,14 @@ const createShiftVersion = async ({ targetWindow } = {}) => {
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     attempts += 1;
     state.lastShiftAttempts = attempts;
-    const result = applyAssignments({ randomize: true, silent: true });
+    const result = generateAssignments({ randomize: true });
     lastResult = result;
     if (result.warnings.length === 0) {
       bestResult = result;
       break;
     }
   }
-  if (bestResult) {
-    state.lastShiftSucceeded = true;
-    state.lastShiftError = "";
-    state.assignments = bestResult.assignments;
-    state.sheet.warnings = bestResult.warnings;
-    state.blockedDays = bestResult.blocked;
-  } else {
+  if (!bestResult) {
     state.loadingShift = false;
     state.lastShiftSucceeded = false;
     renderApp();
@@ -1746,19 +1593,21 @@ const createShiftVersion = async ({ targetWindow } = {}) => {
     }
     return null;
   }
+  state.lastShiftSucceeded = true;
+  state.lastShiftError = "";
   state.loadingShift = false;
   renderApp();
   const versionLabel = `ver${state.shiftVersions.length + 1}`;
   state.shiftVersions = [...state.shiftVersions, versionLabel];
-  openShiftVersionWindow(versionLabel, targetWindow ?? null);
+  openShiftVersionWindow(versionLabel, targetWindow ?? null, bestResult.assignments);
   return versionLabel;
 };
 
-const applyAssignments = ({ randomize, silent } = {}) => {
-  if (!state.sheet) return;
+const generateAssignments = ({ randomize } = {}) => {
+  if (!state.sheet) return { warnings: [], blocked: new Set(), assignments: [] };
   const warnings = [];
   const blocked = new Set();
-  const cells = Array.from(document.querySelectorAll(".shift-cell"));
+  const assignments = state.staff.map(() => Array(state.sheet.days.length).fill(""));
   const dayCounts = Array(state.staff.length).fill(0);
   const nightCounts = Array(state.staff.length).fill(0);
   const firstHalfDayCounts = Array(state.staff.length).fill(0);
@@ -1772,6 +1621,7 @@ const applyAssignments = ({ randomize, silent } = {}) => {
     nightMin: person.nightMin,
     nightMax: person.nightMax
   }));
+  const midIndex = Math.floor((state.sheet.days.length - 1) / 2);
 
   const parseLimit = (value) => {
     if (value === "" || value === null || value === undefined) return null;
@@ -1794,7 +1644,7 @@ const applyAssignments = ({ randomize, silent } = {}) => {
     const dayCount = dayCounts[rowIndex];
     const nightCount = nightCounts[rowIndex];
     const maxDay = state.sheet?.maxDay ?? 20;
-    const maxNight = state.sheet?.maxNight ?? 10;
+    const maxNight = state.sheet?.maxNight ?? 11;
     const maxTotal = state.sheet?.maxTotal ?? maxDay;
     const nightMaxPriority = state.sheet?.nightMaxPriority ?? true;
     const weightedTotal = nightCount * 2 + dayCount;
@@ -1818,12 +1668,28 @@ const applyAssignments = ({ randomize, silent } = {}) => {
     return true;
   };
 
-  const midIndex = Math.floor((state.sheet.days.length - 1) / 2);
+  const isRestDay = (rowIndex, dayIndex) => {
+    const current = assignments?.[rowIndex]?.[dayIndex];
+    if (current === "※") return true;
+    return assignments?.[rowIndex]?.[dayIndex - 1] === "●";
+  };
+
+  const canAssign = (rowIndex, dayIndex) => {
+    if (assignments?.[rowIndex]?.[dayIndex]) return false;
+    return !isRestDay(rowIndex, dayIndex);
+  };
+
+  const hasAdjacentNight = (rowIndex, dayIndex) => {
+    return (
+      assignments?.[rowIndex]?.[dayIndex - 1] === "●" ||
+      assignments?.[rowIndex]?.[dayIndex + 1] === "●"
+    );
+  };
 
   const sortCandidates = (list, shift, dayIndex) => {
     return list.sort((a, b) => {
-      const limitsA = staffLimits[a.rowIndex];
-      const limitsB = staffLimits[b.rowIndex];
+      const limitsA = staffLimits[a];
+      const limitsB = staffLimits[b];
       if (shift === "night") {
         const rankNight = (limits) => {
           if (limits?.shiftType === "夜専") return 0;
@@ -1843,8 +1709,8 @@ const applyAssignments = ({ randomize, silent } = {}) => {
         shift === "day" ? parseLimit(limitsA?.dayMin) : parseLimit(limitsA?.nightMin);
       const minB =
         shift === "day" ? parseLimit(limitsB?.dayMin) : parseLimit(limitsB?.nightMin);
-      const countA = shift === "day" ? dayCounts[a.rowIndex] : nightCounts[a.rowIndex];
-      const countB = shift === "day" ? dayCounts[b.rowIndex] : nightCounts[b.rowIndex];
+      const countA = shift === "day" ? dayCounts[a] : nightCounts[a];
+      const countB = shift === "day" ? dayCounts[b] : nightCounts[b];
       const belowMinA = minA !== null && countA < minA;
       const belowMinB = minB !== null && countB < minB;
       if (belowMinA !== belowMinB) return belowMinA ? -1 : 1;
@@ -1852,131 +1718,84 @@ const applyAssignments = ({ randomize, silent } = {}) => {
       if (shift === "day" && Number.isFinite(dayIndex)) {
         const inFirstHalf = dayIndex <= midIndex;
         const balanceA = inFirstHalf
-          ? firstHalfDayCounts[a.rowIndex] - secondHalfDayCounts[a.rowIndex]
-          : secondHalfDayCounts[a.rowIndex] - firstHalfDayCounts[a.rowIndex];
+          ? firstHalfDayCounts[a] - secondHalfDayCounts[a]
+          : secondHalfDayCounts[a] - firstHalfDayCounts[a];
         const balanceB = inFirstHalf
-          ? firstHalfDayCounts[b.rowIndex] - secondHalfDayCounts[b.rowIndex]
-          : secondHalfDayCounts[b.rowIndex] - firstHalfDayCounts[b.rowIndex];
+          ? firstHalfDayCounts[b] - secondHalfDayCounts[b]
+          : secondHalfDayCounts[b] - firstHalfDayCounts[b];
         if (balanceA !== balanceB) return balanceA - balanceB;
       }
       if (shift === "day" && Number.isFinite(dayIndex)) {
-        const gapA = dayIndex - lastAssignedDay[a.rowIndex];
-        const gapB = dayIndex - lastAssignedDay[b.rowIndex];
+        const gapA = dayIndex - lastAssignedDay[a];
+        const gapB = dayIndex - lastAssignedDay[b];
         if (gapA !== gapB) return gapB - gapA;
       }
-      return Math.random() - 0.5;
+      return randomize ? Math.random() - 0.5 : 0;
     });
   };
 
-  cells.forEach((cell) => {
-    cell.classList.remove("assigned");
-    const label = cell.querySelector(".assigned-shift");
-    if (label) label.textContent = "";
-  });
-  state.assignments = state.staff.map(() => Array(state.sheet.days.length).fill(""));
-
-  const isRestDay = (rowIndex, dayIndex) => {
-    const current = state.assignments?.[rowIndex]?.[dayIndex];
-    if (current === "※") return true;
-    return state.assignments?.[rowIndex]?.[dayIndex - 1] === "●";
-  };
-
-  const canAssign = (rowIndex, dayIndex) => {
-    if (state.assignments?.[rowIndex]?.[dayIndex]) return false;
-    return !isRestDay(rowIndex, dayIndex);
-  };
-
-  const hasAdjacentNight = (rowIndex, dayIndex) => {
-    return (
-      state.assignments?.[rowIndex]?.[dayIndex - 1] === "●" ||
-      state.assignments?.[rowIndex]?.[dayIndex + 1] === "●"
-    );
-  };
-
   const buildAvailable = (day) => {
-    const columnCells = cells.filter(
-      (cell) => Number(cell.dataset.col) === day.index
-    );
     const availableDay = [];
     const availableNight = [];
-    columnCells.forEach((cell) => {
-      const rowIndex = Number(cell.dataset.row);
-      const person = state.staff[rowIndex];
+    state.staff.forEach((person, rowIndex) => {
       if (!person) return;
       if (!canAssign(rowIndex, day.index)) return;
       if (!isStaffAvailableForDay(person, day)) return;
       const value = state.shiftPreferences?.[rowIndex]?.[day.index] || "";
       if (value === "off") return;
       if (isShiftTypeAllowed(rowIndex, "day") && !isOverMax(rowIndex, "day")) {
-        availableDay.push({ cell, rowIndex });
+        availableDay.push(rowIndex);
       }
       if (
         isShiftTypeAllowed(rowIndex, "night") &&
         !isOverMax(rowIndex, "night") &&
         !(
-          state.assignments?.[rowIndex]?.[day.index + 1] &&
-          state.assignments[rowIndex][day.index + 1] !== "※"
+          assignments?.[rowIndex]?.[day.index + 1] &&
+          assignments[rowIndex][day.index + 1] !== "※"
         ) &&
         !hasAdjacentNight(rowIndex, day.index) &&
         lastNightDay[rowIndex] !== day.index - 1
       ) {
-        availableNight.push({ cell, rowIndex });
+        availableNight.push(rowIndex);
       }
     });
-
-    if (randomize) {
-      availableDay.sort(() => Math.random() - 0.5);
-      availableNight.sort(() => Math.random() - 0.5);
-    }
-
     return { availableDay, availableNight };
   };
 
   const getAssignedNightWards = (dayIndex) => {
     const wards = new Set();
-    const columnCells = cells.filter(
-      (cell) => Number(cell.dataset.col) === dayIndex
-    );
-    columnCells.forEach((cell) => {
-      const assignedLabel = cell.querySelector(".assigned-shift");
-      if (!assignedLabel || assignedLabel.textContent !== "●") return;
-      const rowIndex = Number(cell.dataset.row);
+    assignments.forEach((row, rowIndex) => {
+      if (row[dayIndex] !== "●") return;
       const ward = state.staff[rowIndex]?.ward;
       if (ward) wards.add(ward);
     });
     return wards;
   };
 
-  const assign = (cellsToUse, required, label, shift, dayIndex) => {
+  const assign = (rowIndexes, required, label, shift, dayIndex) => {
     let count = 0;
     const assignedNightWards =
       shift === "night" ? getAssignedNightWards(dayIndex) : new Set();
-    const sortedCandidates = sortCandidates(cellsToUse, shift, dayIndex);
-    for (const entry of sortedCandidates) {
+    const sortedCandidates = sortCandidates(rowIndexes, shift, dayIndex);
+    for (const rowIndex of sortedCandidates) {
       if (count >= required) break;
-      if (isOverMax(entry.rowIndex, shift)) continue;
-      if (shift === "night" && lastNightDay[entry.rowIndex] === dayIndex - 1) continue;
-      if (shift === "night" && hasAdjacentNight(entry.rowIndex, dayIndex)) continue;
+      if (isOverMax(rowIndex, shift)) continue;
+      if (shift === "night" && lastNightDay[rowIndex] === dayIndex - 1) continue;
+      if (shift === "night" && hasAdjacentNight(rowIndex, dayIndex)) continue;
       if (
         shift === "night" &&
-        state.assignments?.[entry.rowIndex]?.[dayIndex + 1] &&
-        state.assignments[entry.rowIndex][dayIndex + 1] !== "※"
+        assignments?.[rowIndex]?.[dayIndex + 1] &&
+        assignments[rowIndex][dayIndex + 1] !== "※"
       ) {
         continue;
       }
       if (shift === "night") {
-        const ward = state.staff[entry.rowIndex]?.ward;
+        const ward = state.staff[rowIndex]?.ward;
         if (ward && assignedNightWards.has(ward)) continue;
         if (ward) assignedNightWards.add(ward);
       }
-      const assignedLabel = entry.cell.querySelector(".assigned-shift");
-      if (assignedLabel && assignedLabel.textContent) continue;
-      assignedLabel.textContent = label;
-      entry.cell.classList.add("assigned");
-      const rowIndex = entry.rowIndex;
-      if (!Number.isNaN(rowIndex)) {
-        state.assignments[rowIndex][dayIndex] = label;
-      }
+      if (assignments?.[rowIndex]?.[dayIndex]) continue;
+      assignments[rowIndex][dayIndex] = label;
       if (shift === "day") {
         dayCounts[rowIndex] += 1;
         lastAssignedDay[rowIndex] = dayIndex;
@@ -1993,120 +1812,52 @@ const applyAssignments = ({ randomize, silent } = {}) => {
       count += 1;
     }
     return count;
-  };
-
-  const assignRelaxed = (cellsToUse, required, label, shift, dayIndex) => {
-    let count = 0;
-    const assignedNightWards =
-      shift === "night" ? getAssignedNightWards(dayIndex) : new Set();
-    const sortedCandidates = sortCandidates(cellsToUse, shift, dayIndex);
-    for (const entry of sortedCandidates) {
-      if (count >= required) break;
-      if (isOverMax(entry.rowIndex, shift)) continue;
-      if (shift === "night" && lastNightDay[entry.rowIndex] === dayIndex - 1) continue;
-      if (shift === "night" && hasAdjacentNight(entry.rowIndex, dayIndex)) continue;
-      if (shift === "night") {
-        const ward = state.staff[entry.rowIndex]?.ward;
-        if (ward && assignedNightWards.has(ward)) continue;
-        if (ward) assignedNightWards.add(ward);
-      }
-      const assignedLabel = entry.cell.querySelector(".assigned-shift");
-      if (assignedLabel && assignedLabel.textContent) continue;
-      assignedLabel.textContent = label;
-      entry.cell.classList.add("assigned");
-      const rowIndex = entry.rowIndex;
-      if (!Number.isNaN(rowIndex)) {
-        state.assignments[rowIndex][dayIndex] = label;
-      }
-      if (shift === "day") {
-        dayCounts[rowIndex] += 1;
-        lastAssignedDay[rowIndex] = dayIndex;
-        if (dayIndex <= midIndex) {
-          firstHalfDayCounts[rowIndex] += 1;
-        } else {
-          secondHalfDayCounts[rowIndex] += 1;
-        }
-      } else {
-        nightCounts[rowIndex] += 1;
-        lastAssignedDay[rowIndex] = dayIndex;
-        lastNightDay[rowIndex] = dayIndex;
-      }
-      count += 1;
-    }
-    return count;
-  };
-
-  const assignExtras = (cellsToUse, label, shift, dayIndex) => {
-    const assignedNightWards = new Set();
-    const sortedCandidates = sortCandidates(cellsToUse, shift, dayIndex);
-    for (const entry of sortedCandidates) {
-      if (isOverMax(entry.rowIndex, shift)) continue;
-      if (shift === "night" && lastNightDay[entry.rowIndex] === dayIndex - 1) continue;
-      if (shift === "night" && hasAdjacentNight(entry.rowIndex, dayIndex)) continue;
-      if (shift === "night") {
-        const ward = state.staff[entry.rowIndex]?.ward;
-        if (ward && assignedNightWards.has(ward)) continue;
-        if (ward) assignedNightWards.add(ward);
-      }
-      const assignedLabel = entry.cell.querySelector(".assigned-shift");
-      if (assignedLabel && assignedLabel.textContent) continue;
-      assignedLabel.textContent = label;
-      entry.cell.classList.add("assigned");
-      const rowIndex = entry.rowIndex;
-      if (!Number.isNaN(rowIndex)) {
-        state.assignments[rowIndex][dayIndex] = label;
-      }
-      if (shift === "day") {
-        dayCounts[rowIndex] += 1;
-        lastAssignedDay[rowIndex] = dayIndex;
-        if (dayIndex <= midIndex) {
-          firstHalfDayCounts[rowIndex] += 1;
-        } else {
-          secondHalfDayCounts[rowIndex] += 1;
-        }
-      } else {
-        nightCounts[rowIndex] += 1;
-        lastAssignedDay[rowIndex] = dayIndex;
-        lastNightDay[rowIndex] = dayIndex;
-      }
-    }
   };
 
   const applyNightRests = () => {
-    cells.forEach((cell) => {
-      const assignedLabel = cell.querySelector(".assigned-shift");
-      if (!assignedLabel || assignedLabel.textContent !== "●") return;
-      const rowIndex = Number(cell.dataset.row);
-      const colIndex = Number(cell.dataset.col);
-      if (Number.isNaN(rowIndex) || Number.isNaN(colIndex)) return;
-      const nextCell = cells.find(
-        (entry) =>
-          Number(entry.dataset.row) === rowIndex &&
-          Number(entry.dataset.col) === colIndex + 1
-      );
-      if (!nextCell) return;
-      const nextLabel = nextCell.querySelector(".assigned-shift");
-      if (!nextLabel) return;
-      if (nextLabel.textContent === "●" || !nextLabel.textContent) {
-        nextLabel.textContent = "※";
-        nextCell.classList.add("assigned");
-        state.assignments[rowIndex][colIndex + 1] = "※";
-      }
+    assignments.forEach((row, rowIndex) => {
+      row.forEach((value, colIndex) => {
+        if (value !== "●") return;
+        const nextIndex = colIndex + 1;
+        if (nextIndex >= row.length) return;
+        if (row[nextIndex] === "●" || !row[nextIndex]) {
+          row[nextIndex] = "※";
+        }
+      });
     });
   };
 
-  const assignedNights = new Map();
-  const nightsPriority = [...state.sheet.days].sort((a, b) => {
-    if (b.requiredNight !== a.requiredNight) return b.requiredNight - a.requiredNight;
-    if (b.requiredDay !== a.requiredDay) return b.requiredDay - a.requiredDay;
-    return Math.random() - 0.5;
-  });
-  const daysPriority = [...state.sheet.days].sort((a, b) => {
-    if (b.requiredDay !== a.requiredDay) return b.requiredDay - a.requiredDay;
-    if (b.requiredNight !== a.requiredNight) return b.requiredNight - a.requiredNight;
-    return Math.random() - 0.5;
-  });
+  const nightOffCounts = state.sheet.days.map((day) =>
+    state.staff.reduce((count, _, rowIndex) => {
+      const pref = state.shiftPreferences?.[rowIndex]?.[day.index];
+      return pref === "off" ? count + 1 : count;
+    }, 0)
+  );
+  const highOffDays = new Set(
+    state.sheet.days.filter((day) => nightOffCounts[day.index] > 0).map((day) => day.index)
+  );
+  const hasNeighborHighOff = (index) =>
+    highOffDays.has(index - 1) || highOffDays.has(index + 1);
 
+  const nightsPriority = [...state.sheet.days].sort((a, b) => {
+    const group = (day) => {
+      if (nightOffCounts[day.index] > 0) return 0;
+      if (hasNeighborHighOff(day.index)) return 1;
+      return 2;
+    };
+    const groupA = group(a);
+    const groupB = group(b);
+    if (groupA !== groupB) return groupA - groupB;
+    if (groupA === 0 && nightOffCounts[a.index] !== nightOffCounts[b.index]) {
+      return nightOffCounts[b.index] - nightOffCounts[a.index];
+    }
+    if (b.requiredNight !== a.requiredNight) return b.requiredNight - a.requiredNight;
+    if (b.requiredDay !== a.requiredDay) return b.requiredDay - a.requiredDay;
+    return a.index - b.index;
+  });
+  const daysPriority = [...state.sheet.days].sort((a, b) => a.index - b.index);
+
+  const assignedNights = new Map();
   nightsPriority.forEach((day) => {
     if (state.fixedDays.has(day.index)) return;
     const { availableNight } = buildAvailable(day);
@@ -2118,24 +1869,19 @@ const applyAssignments = ({ randomize, silent } = {}) => {
       day.index
     );
     if (nightCount < day.requiredNight) {
-      const columnCells = cells.filter(
-        (cell) => Number(cell.dataset.col) === day.index
-      );
-      const relaxedNight = [];
-      columnCells.forEach((cell) => {
-        const rowIndex = Number(cell.dataset.row);
-        const person = state.staff[rowIndex];
-        if (!person) return;
-        if (!canAssign(rowIndex, day.index)) return;
-        if (!isStaffAvailableForDay(person, day)) return;
-        const value = state.shiftPreferences?.[rowIndex]?.[day.index] || "";
-        if (value === "off") return;
-        if (hasAdjacentNight(rowIndex, day.index)) return;
-        if (isShiftTypeAllowed(rowIndex, "night")) {
-          relaxedNight.push({ cell, rowIndex });
-        }
-      });
-      nightCount += assignRelaxed(
+      const relaxedNight = state.staff
+        .map((person, rowIndex) => ({ person, rowIndex }))
+        .filter(({ person, rowIndex }) => {
+          if (!person) return false;
+          if (!canAssign(rowIndex, day.index)) return false;
+          if (!isStaffAvailableForDay(person, day)) return false;
+          const value = state.shiftPreferences?.[rowIndex]?.[day.index] || "";
+          if (value === "off") return false;
+          if (hasAdjacentNight(rowIndex, day.index)) return false;
+          return isShiftTypeAllowed(rowIndex, "night");
+        })
+        .map(({ rowIndex }) => rowIndex);
+      nightCount += assign(
         relaxedNight,
         day.requiredNight - nightCount,
         "●",
@@ -2144,22 +1890,18 @@ const applyAssignments = ({ randomize, silent } = {}) => {
       );
     }
     if (nightCount < day.requiredNight) {
-      const columnCells = cells.filter(
-        (cell) => Number(cell.dataset.col) === day.index
-      );
-      const anyNight = [];
-      columnCells.forEach((cell) => {
-        const rowIndex = Number(cell.dataset.row);
-        const person = state.staff[rowIndex];
-        if (!person) return;
-        if (!canAssign(rowIndex, day.index)) return;
-        if (!isStaffAvailableForDay(person, day)) return;
-        const value = state.shiftPreferences?.[rowIndex]?.[day.index] || "";
-        if (value === "off") return;
-        if (hasAdjacentNight(rowIndex, day.index)) return;
-        anyNight.push({ cell, rowIndex });
-      });
-      nightCount += assignRelaxed(
+      const anyNight = state.staff
+        .map((person, rowIndex) => ({ person, rowIndex }))
+        .filter(({ person, rowIndex }) => {
+          if (!person) return false;
+          if (!canAssign(rowIndex, day.index)) return false;
+          if (!isStaffAvailableForDay(person, day)) return false;
+          const value = state.shiftPreferences?.[rowIndex]?.[day.index] || "";
+          if (value === "off") return false;
+          return !hasAdjacentNight(rowIndex, day.index);
+        })
+        .map(({ rowIndex }) => rowIndex);
+      nightCount += assign(
         anyNight,
         day.requiredNight - nightCount,
         "●",
@@ -2184,23 +1926,18 @@ const applyAssignments = ({ randomize, silent } = {}) => {
       day.index
     );
     if (dayCount < dayRequired) {
-      const columnCells = cells.filter(
-        (cell) => Number(cell.dataset.col) === day.index
-      );
-      const relaxedDay = [];
-      columnCells.forEach((cell) => {
-        const rowIndex = Number(cell.dataset.row);
-        const person = state.staff[rowIndex];
-        if (!person) return;
-        if (!canAssign(rowIndex, day.index)) return;
-        if (!isStaffAvailableForDay(person, day)) return;
-        const value = state.shiftPreferences?.[rowIndex]?.[day.index] || "";
-        if (value === "off") return;
-        if (isShiftTypeAllowed(rowIndex, "day")) {
-          relaxedDay.push({ cell, rowIndex });
-        }
-      });
-      dayCount += assignRelaxed(
+      const relaxedDay = state.staff
+        .map((person, rowIndex) => ({ person, rowIndex }))
+        .filter(({ person, rowIndex }) => {
+          if (!person) return false;
+          if (!canAssign(rowIndex, day.index)) return false;
+          if (!isStaffAvailableForDay(person, day)) return false;
+          const value = state.shiftPreferences?.[rowIndex]?.[day.index] || "";
+          if (value === "off") return false;
+          return isShiftTypeAllowed(rowIndex, "day");
+        })
+        .map(({ rowIndex }) => rowIndex);
+      dayCount += assign(
         relaxedDay,
         dayRequired - dayCount,
         "○",
@@ -2215,15 +1952,10 @@ const applyAssignments = ({ randomize, silent } = {}) => {
     }
   });
 
-  state.sheet.warnings = warnings;
-  state.blockedDays = blocked;
-  if (!silent) {
-    renderApp();
-  }
   return {
     warnings,
     blocked,
-    assignments: structuredClone(state.assignments)
+    assignments: structuredClone(assignments)
   };
 };
 
@@ -2251,98 +1983,6 @@ const openSettingsPanel = (rowIndex) => {
   panel.showModal();
 };
 
-const startOwnerSession = () => {
-  state.view = "dashboard";
-  state.ownerMode = true;
-  renderApp();
-};
-
-const startGuestSession = () => {
-  state.view = "dashboard";
-  state.ownerMode = false;
-  setAuthToken("");
-  state.sheet = null;
-  state.currentSheetId = null;
-  state.selectedGroup = "";
-  const persisted = loadPersistedState();
-  state.groups = persisted?.groups ?? [];
-  state.sheets = persisted?.sheets ?? [];
-  renderApp();
-};
-
-const validateOwnerFields = () => {
-  const { email, password } = state.owner;
-  return email && password;
-};
-
-const syncOwnerState = async () => {
-  const remote = await loadRemoteState();
-  if (remote) {
-    state.groups = remote.groups;
-    state.sheets = remote.sheets;
-    return true;
-  }
-  if (persistedState) {
-    state.groups = persistedState.groups;
-    state.sheets = persistedState.sheets;
-  }
-  return false;
-};
-
-const loginOwner = async ({ email, password }) => {
-  if (state.apiStatus === "offline") {
-    state.warningMessage = getConnectionHelpMessage();
-    openDialog(".warning-dialog");
-    return;
-  }
-  try {
-    const response = await apiRequest("/api/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password })
-    });
-    setAuthToken(response.token);
-    state.owner.email = response.email;
-    state.owner.password = "";
-    await syncOwnerState();
-    startOwnerSession();
-  } catch (error) {
-    state.warningMessage =
-      error instanceof TypeError
-        ? getConnectionHelpMessage()
-        : error.message || "ログインに失敗しました。";
-    openDialog(".warning-dialog");
-  }
-};
-
-const registerOwner = async ({ email, password }) => {
-  if (state.apiStatus === "offline") {
-    state.warningMessage = getConnectionHelpMessage();
-    openDialog(".warning-dialog");
-    return;
-  }
-  try {
-    await apiRequest("/api/register", {
-      method: "POST",
-      body: JSON.stringify({ email, password })
-    });
-    await loginOwner({ email, password });
-  } catch (error) {
-    state.warningMessage =
-      error instanceof TypeError
-        ? getConnectionHelpMessage()
-        : error.message || "登録に失敗しました。";
-    openDialog(".warning-dialog");
-  }
-};
-
-const logoutOwner = async () => {
-  if (state.authToken) {
-    apiRequest("/api/logout", { method: "POST" }).catch(() => {});
-  }
-  setAuthToken("");
-  resetState();
-};
-
 const openSheetFromList = (sheetId) => {
   const sheet = state.sheets.find((item) => item.id === sheetId);
   if (!sheet) return;
@@ -2360,7 +2000,7 @@ const openSheetFromList = (sheetId) => {
     warnings: [],
     generatedAt: sheet.generatedAt,
     maxDay: sheet.maxDay ?? 20,
-    maxNight: sheet.maxNight ?? 10,
+    maxNight: sheet.maxNight ?? 11,
     maxTotal: sheet.maxTotal ?? 20,
     nightMaxPriority: sheet.nightMaxPriority ?? true
   };
@@ -2403,73 +2043,20 @@ const openSheetFromList = (sheetId) => {
   renderApp();
 };
 
-const initApp = async () => {
-  await checkApiHealth();
-  if (state.authToken) {
-    try {
-      const profile = await apiRequest("/api/me");
-      state.owner.email = profile.email;
-      await syncOwnerState();
-      state.view = "dashboard";
-    } catch (error) {
-      setAuthToken("");
-      if (persistedState) {
-        state.groups = persistedState.groups;
-        state.sheets = persistedState.sheets;
-      }
-    }
-  } else if (persistedState) {
+const initApp = () => {
+  if (persistedState) {
     state.groups = persistedState.groups;
     state.sheets = persistedState.sheets;
   }
+  state.view = "dashboard";
   renderApp();
 };
 
-void initApp();
+initApp();
 
 document.body.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
-
-  if (target.id === "go-register") {
-    state.view = "register";
-    renderApp();
-    return;
-  }
-
-  if (target.id === "back-to-login") {
-    state.view = "login";
-    renderApp();
-    return;
-  }
-
-  if (target.id === "enter-guest") {
-    startGuestSession();
-    return;
-  }
-
-  if (target.id === "login-owner" || target.id === "register-owner") {
-    const emailInput = document.getElementById("owner-email");
-    const passwordInput = document.getElementById("owner-password");
-    if (
-      emailInput instanceof HTMLInputElement &&
-      passwordInput instanceof HTMLInputElement
-    ) {
-      const email = emailInput.value.trim();
-      const password = passwordInput.value.trim();
-      state.owner = { email, password };
-      if (!validateOwnerFields()) {
-        state.warningMessage = "メールアドレスとパスワードを入力してください。";
-        openDialog(".warning-dialog");
-        return;
-      }
-      if (target.id === "register-owner") {
-        void registerOwner({ email, password });
-      } else {
-        void loginOwner({ email, password });
-      }
-    }
-  }
 
   if (target.id === "create-group") {
     if (!state.ownerMode) return;
@@ -2607,10 +2194,6 @@ document.body.addEventListener("click", (event) => {
     renderAppPreserveScroll();
   }
 
-  if (target.id === "logout") {
-    void logoutOwner();
-  }
-
   if (target.id === "reset-sheet") {
     if (!state.ownerMode) return;
     const sheetId = state.currentSheetId;
@@ -2623,6 +2206,20 @@ document.body.addEventListener("click", (event) => {
   if (target.dataset.action === "open-sheet") {
     const sheetId = target.dataset.id;
     openSheetFromList(sheetId);
+  }
+
+  if (target.dataset.action === "open-saved-shift") {
+    const entryId = target.dataset.id;
+    const sheet = state.sheets.find((item) => item.id === state.currentSheetId);
+    const savedLinks = sheet?.savedLinks ?? [];
+    const entry = savedLinks.find((item) => item.id === entryId);
+    if (!entry) return;
+    const targetWindow = window.open("", "_blank");
+    openShiftVersionWindow(entry.name, targetWindow, entry.assignments, {
+      fixedCells: entry.fixedCells,
+      requiredDay: entry.requiredDay,
+      requiredNight: entry.requiredNight
+    });
   }
 
   if (target.dataset.action === "close") {
@@ -2844,8 +2441,9 @@ document.body.addEventListener("submit", (event) => {
         savedFixedCells: [],
         savedRequiredDay: [],
         savedRequiredNight: [],
+        savedLinks: [],
         maxDay: 20,
-        maxNight: 10,
+        maxNight: 11,
         maxTotal: 20,
         nightMaxPriority: true
       };
@@ -2860,7 +2458,7 @@ document.body.addEventListener("submit", (event) => {
         warnings: [],
         generatedAt: new Date(),
         maxDay: 20,
-        maxNight: 10,
+        maxNight: 11,
         maxTotal: 20,
         nightMaxPriority: true
       };
