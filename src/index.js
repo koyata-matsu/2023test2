@@ -538,6 +538,7 @@ const openShiftVersionWindow = (
           const staffAvailability = ${JSON.stringify(staffAvailability)};
           const shiftPreferences = ${JSON.stringify(shiftPreferences)};
           const fixedCells = new Set(${JSON.stringify(Array.from(fixedCells))});
+          const initialAssignments = ${JSON.stringify(baseAssignments ?? [])};
           const sheetId = ${JSON.stringify(sheetId)};
           let currentWarnings = [];
 
@@ -569,6 +570,19 @@ const openShiftVersionWindow = (
             const valueEl = cell.querySelector('.cell-value');
             if (!valueEl) return;
             valueEl.textContent = select.value;
+          };
+
+          const syncSelectionsFromAssignments = () => {
+            const rows = document.querySelectorAll('tbody tr');
+            rows.forEach((row, rowIndex) => {
+              const selects = row.querySelectorAll('select[data-action="edit-cell"]');
+              selects.forEach((select, colIndex) => {
+                const off = shiftPreferences?.[rowIndex]?.[colIndex] === "off";
+                const value = off ? "休" : initialAssignments?.[rowIndex]?.[colIndex] || "";
+                select.value = value;
+                updateCellLabel(select);
+              });
+            });
           };
 
           const syncAllCellLabels = () => {
@@ -891,6 +905,7 @@ const openShiftVersionWindow = (
               updateCellFixedState(rowIndex, colIndex);
             });
           });
+          syncSelectionsFromAssignments();
           syncAllCellLabels();
           enforceNightRests();
           updateWarnings();
