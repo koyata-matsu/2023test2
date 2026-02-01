@@ -8,7 +8,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   },
@@ -19,7 +19,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   },
@@ -30,7 +30,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   },
@@ -41,7 +41,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   },
@@ -52,7 +52,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   },
@@ -63,7 +63,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   },
@@ -74,7 +74,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   },
@@ -85,7 +85,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   },
@@ -96,7 +96,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   },
@@ -107,7 +107,7 @@ const initialStaff = [
     availabilityType: "all",
     availableWeekdays: [],
     dayMin: "",
-    dayMax: "25",
+    dayMax: "20",
     nightMin: "",
     nightMax: "11"
   }
@@ -130,7 +130,7 @@ const createEmptyStaff = () => ({
   availabilityType: "all",
   availableWeekdays: [],
   dayMin: "",
-  dayMax: "25",
+  dayMax: "20",
   nightMin: "",
   nightMax: "11"
 });
@@ -179,8 +179,9 @@ const buildDays = (year, month) => {
   });
 };
 
-const formatTimestamp = (date) => {
-  if (!(date instanceof Date)) return "";
+const formatTimestamp = (value) => {
+  const date = value instanceof Date ? value : value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "";
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
@@ -308,16 +309,17 @@ const persistedState = loadPersistedState();
 const openShiftVersionWindow = (
   versionLabel,
   targetWindow = null,
-  assignmentsOverride = null
+  assignmentsOverride = null,
+  options = {}
 ) => {
   if (!state.sheet) return;
   const newWindow = targetWindow ?? window.open("", "_blank");
   if (!newWindow) return;
   newWindow.location.href = `about:blank#${versionLabel}`;
-  const fixedCells = new Set(state.fixedCells ?? []);
+  const fixedCells = new Set(options.fixedCells ?? state.fixedCells ?? []);
   const baseAssignments = assignmentsOverride ?? state.assignments;
-  const requiredDay = state.sheet.days.map((day) => day.requiredDay);
-  const requiredNight = state.sheet.days.map((day) => day.requiredNight);
+  const requiredDay = options.requiredDay ?? state.sheet.days.map((day) => day.requiredDay);
+  const requiredNight = options.requiredNight ?? state.sheet.days.map((day) => day.requiredNight);
   const dayLabels = state.sheet.days.map((day) => `${day.dateLabel}(${day.weekday})`);
   const dayWeekdays = state.sheet.days.map((day) => day.weekday);
   const staffLimits = state.staff.map((person) => ({
@@ -771,22 +773,22 @@ const openShiftVersionWindow = (
             if (!(target instanceof HTMLButtonElement)) return;
             if (target.matches('#save-shift')) {
               const opener = window.opener;
-              if (!opener || typeof opener.saveShiftResult !== 'function') return;
+              if (!opener || typeof opener.saveShiftSnapshot !== 'function') return;
+              const name = window.prompt('保存名を入力してください');
+              if (!name) return;
               const rows = document.querySelectorAll('tbody tr');
               const assignments = Array.from(rows).map((row) => {
                 const selects = row.querySelectorAll('select[data-action="edit-cell"]');
                 return Array.from(selects).map((select) => select.value);
               });
-              opener.saveShiftResult({
+              opener.saveShiftSnapshot({
                 sheetId,
+                name,
                 assignments,
                 fixedCells: Array.from(fixedCells),
                 requiredDay,
                 requiredNight
               });
-              if (typeof opener.notifyShiftSaved === 'function') {
-                opener.notifyShiftSaved();
-              }
               window.close();
               return;
             }
@@ -875,7 +877,7 @@ const renderSidePanel = () => `
           </label>
           <label>
             最大夜勤
-            <input id="max-night" type="number" min="0" value="${state.sheet?.maxNight ?? 10}" ${
+            <input id="max-night" type="number" min="0" value="${state.sheet?.maxNight ?? 11}" ${
               state.ownerMode ? "" : "disabled"
             } />
           </label>
@@ -907,6 +909,40 @@ const renderSidePanel = () => `
             : ""
         }
         <p class="helper-text">固定した日付は変更されません。</p>
+      </section>
+      <section class="shift-action">
+        <h2>リンク作成</h2>
+        <p class="helper-text">保存したシフトをここから開けます。</p>
+        <div class="link-list">
+          ${
+            state.currentSheetId
+              ? (() => {
+                  const sheet = state.sheets.find((item) => item.id === state.currentSheetId);
+                  const savedLinks = sheet?.savedLinks ?? [];
+                  if (savedLinks.length === 0) {
+                    return '<p class="helper-text">保存済みのシフトはありません。</p>';
+                  }
+                  return savedLinks
+                    .map(
+                      (item) => `
+                        <div class="sheet-card">
+                          <div>
+                            <h3>${item.name}</h3>
+                            <p class="sheet-meta">保存: ${formatTimestamp(item.createdAt)}</p>
+                          </div>
+                          <div class="sheet-actions">
+                            <button class="ghost" data-action="open-saved-shift" data-id="${item.id}">
+                              開く
+                            </button>
+                          </div>
+                        </div>
+                      `
+                    )
+                    .join("");
+                })()
+              : '<p class="helper-text">シフト表を開くと保存一覧が表示されます。</p>'
+          }
+        </div>
       </section>
     `
         : ""
@@ -1399,43 +1435,42 @@ const renderAppPreserveScroll = () => {
   window.scrollTo(windowScrollX, windowScrollY);
 };
 
-window.saveShiftResult = ({ sheetId, assignments, fixedCells, requiredDay, requiredNight }) => {
-  if (!sheetId) return;
+window.saveShiftSnapshot = ({
+  sheetId,
+  name,
+  assignments,
+  fixedCells,
+  requiredDay,
+  requiredNight
+}) => {
+  if (!sheetId || !name) return;
   const sheetIndex = state.sheets.findIndex((item) => item.id === sheetId);
   if (sheetIndex === -1) return;
   const sheet = state.sheets[sheetIndex];
+  const savedLinks = Array.isArray(sheet.savedLinks) ? sheet.savedLinks : [];
+  const entryId =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const snapshot = {
+    id: entryId,
+    name,
+    createdAt: new Date().toISOString(),
+    assignments,
+    fixedCells,
+    requiredDay,
+    requiredNight
+  };
   const updatedSheet = {
     ...sheet,
-    savedAssignments: assignments,
-    savedFixedCells: fixedCells,
-    savedRequiredDay: requiredDay,
-    savedRequiredNight: requiredNight,
-    generatedAt: new Date()
+    savedLinks: [snapshot, ...savedLinks]
   };
   state.sheets = [
     ...state.sheets.slice(0, sheetIndex),
     updatedSheet,
     ...state.sheets.slice(sheetIndex + 1)
   ];
-  if (state.currentSheetId === sheetId && state.sheet) {
-    state.assignments = assignments;
-    state.fixedCells = new Set(fixedCells ?? []);
-    state.sheet.days.forEach((day, index) => {
-      if (Array.isArray(requiredDay) && requiredDay[index] !== undefined) {
-        day.requiredDay = requiredDay[index];
-      }
-      if (Array.isArray(requiredNight) && requiredNight[index] !== undefined) {
-        day.requiredNight = requiredNight[index];
-      }
-    });
-    state.sheet.generatedAt = updatedSheet.generatedAt;
-  }
   persistState();
-  renderApp();
-};
-
-window.notifyShiftSaved = () => {
-  state.view = "sheet";
   renderApp();
 };
 
@@ -1595,7 +1630,7 @@ const generateAssignments = ({ randomize } = {}) => {
     const dayCount = dayCounts[rowIndex];
     const nightCount = nightCounts[rowIndex];
     const maxDay = state.sheet?.maxDay ?? 20;
-    const maxNight = state.sheet?.maxNight ?? 10;
+    const maxNight = state.sheet?.maxNight ?? 11;
     const maxTotal = state.sheet?.maxTotal ?? maxDay;
     const nightMaxPriority = state.sheet?.nightMaxPriority ?? true;
     const weightedTotal = nightCount * 2 + dayCount;
@@ -1951,7 +1986,7 @@ const openSheetFromList = (sheetId) => {
     warnings: [],
     generatedAt: sheet.generatedAt,
     maxDay: sheet.maxDay ?? 20,
-    maxNight: sheet.maxNight ?? 10,
+    maxNight: sheet.maxNight ?? 11,
     maxTotal: sheet.maxTotal ?? 20,
     nightMaxPriority: sheet.nightMaxPriority ?? true
   };
@@ -2157,6 +2192,20 @@ document.body.addEventListener("click", (event) => {
   if (target.dataset.action === "open-sheet") {
     const sheetId = target.dataset.id;
     openSheetFromList(sheetId);
+  }
+
+  if (target.dataset.action === "open-saved-shift") {
+    const entryId = target.dataset.id;
+    const sheet = state.sheets.find((item) => item.id === state.currentSheetId);
+    const savedLinks = sheet?.savedLinks ?? [];
+    const entry = savedLinks.find((item) => item.id === entryId);
+    if (!entry) return;
+    const targetWindow = window.open("", "_blank");
+    openShiftVersionWindow(entry.name, targetWindow, entry.assignments, {
+      fixedCells: entry.fixedCells,
+      requiredDay: entry.requiredDay,
+      requiredNight: entry.requiredNight
+    });
   }
 
   if (target.dataset.action === "close") {
@@ -2378,8 +2427,9 @@ document.body.addEventListener("submit", (event) => {
         savedFixedCells: [],
         savedRequiredDay: [],
         savedRequiredNight: [],
+        savedLinks: [],
         maxDay: 20,
-        maxNight: 10,
+        maxNight: 11,
         maxTotal: 20,
         nightMaxPriority: true
       };
@@ -2394,7 +2444,7 @@ document.body.addEventListener("submit", (event) => {
         warnings: [],
         generatedAt: new Date(),
         maxDay: 20,
-        maxNight: 10,
+        maxNight: 11,
         maxTotal: 20,
         nightMaxPriority: true
       };
