@@ -354,6 +354,7 @@ const openShiftVersionWindow = (
                 <option value="※" ${label === "※" ? "selected" : ""}>※</option>
                 <option value="休" ${label === "休" ? "selected" : ""}>休み</option>
                 </select>
+                <span class="cell-value" aria-hidden="true">${label}</span>
               </div>
             </td>
           `;
@@ -438,6 +439,7 @@ const openShiftVersionWindow = (
             cursor: pointer;
           }
           select { padding: 4px 6px; border-radius: 6px; border: 1px solid #cbd5f5; font-size: 16px; }
+          .cell-value { display: none; font-size: 16px; }
           .summary-col { background: #f1f5f9; }
           .warning-panel { margin-top: 16px; padding: 12px; border: 1px solid #fca5a5; border-radius: 8px; background: #fef2f2; }
           .warning-panel h2 { margin: 0 0 8px; font-size: 14px; }
@@ -471,6 +473,19 @@ const openShiftVersionWindow = (
             border-radius: 8px;
             padding: 6px 12px;
             cursor: pointer;
+          }
+          @media print {
+            .cell-fix-toggle,
+            .shift-result-actions,
+            .legend,
+            .warning-panel,
+            .print-modal,
+            select {
+              display: none !important;
+            }
+            .cell-value {
+              display: inline !important;
+            }
           }
         </style>
       </head>
@@ -543,6 +558,20 @@ const openShiftVersionWindow = (
 
           const cellKey = (rowIndex, colIndex) => \`\${rowIndex}-\${colIndex}\`;
 
+          const updateCellLabel = (select) => {
+            if (!select) return;
+            const cell = select.closest('td');
+            if (!cell) return;
+            const valueEl = cell.querySelector('.cell-value');
+            if (!valueEl) return;
+            valueEl.textContent = select.value;
+          };
+
+          const syncAllCellLabels = () => {
+            const selects = document.querySelectorAll('select[data-action="edit-cell"]');
+            selects.forEach((select) => updateCellLabel(select));
+          };
+
           const updateCellFixedState = (rowIndex, colIndex) => {
             const key = cellKey(rowIndex, colIndex);
             const cell = document.querySelector(\`td[data-row="\${rowIndex}"][data-col="\${colIndex}"]\`);
@@ -614,6 +643,7 @@ const openShiftVersionWindow = (
             const nextCell = row.querySelector(\`td[data-col="\${colIndex + 1}"] select[data-action="edit-cell"]\`);
             if (!nextCell || nextCell.disabled) return;
             nextCell.value = "※";
+            updateCellLabel(nextCell);
           };
 
           const isStaffAvailableForDay = (rowIndex, colIndex) => {
@@ -789,6 +819,7 @@ const openShiftVersionWindow = (
                 target.value = "";
               }
             }
+            updateCellLabel(target);
             applyNightNextDay(target);
             updateWarnings();
           });
@@ -857,6 +888,7 @@ const openShiftVersionWindow = (
               updateCellFixedState(rowIndex, colIndex);
             });
           });
+          syncAllCellLabels();
           enforceNightRests();
           updateWarnings();
         </script>
