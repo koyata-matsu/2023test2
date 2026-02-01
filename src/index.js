@@ -574,14 +574,36 @@ const openShiftVersionWindow = (
 
           const syncSelectionsFromAssignments = () => {
             const rows = document.querySelectorAll('tbody tr');
+            const dayCounts = Array(requiredDay.length).fill(0);
+            const nightCounts = Array(requiredDay.length).fill(0);
             rows.forEach((row, rowIndex) => {
               const selects = row.querySelectorAll('select[data-action="edit-cell"]');
+              let rowDayCount = 0;
+              let rowNightCount = 0;
               selects.forEach((select, colIndex) => {
                 const off = shiftPreferences?.[rowIndex]?.[colIndex] === "off";
                 const value = off ? "休" : initialAssignments?.[rowIndex]?.[colIndex] || "";
                 select.value = value;
                 updateCellLabel(select);
+                if (value === "○") {
+                  dayCounts[colIndex] += 1;
+                  rowDayCount += 1;
+                }
+                if (value === "●") {
+                  nightCounts[colIndex] += 1;
+                  rowNightCount += 1;
+                }
               });
+              const rowCount = row.querySelector('[data-row-count="' + rowIndex + '"]');
+              if (rowCount) {
+                rowCount.textContent = '日:' + rowDayCount + ' / 夜:' + rowNightCount;
+              }
+            });
+            dayCounts.forEach((count, index) => {
+              const actualCell = document.querySelector('[data-actual-col="' + index + '"]');
+              if (actualCell) {
+                actualCell.textContent = '日:' + count + ' 夜:' + nightCounts[index];
+              }
             });
           };
 
