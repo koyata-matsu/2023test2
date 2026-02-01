@@ -397,8 +397,8 @@ const openShiftVersionWindow = (
       <head>
         <title>シフト結果 ${versionLabel}</title>
         <style>
-          body { font-family: "Noto Sans JP", sans-serif; padding: 20px; }
-          table { border-collapse: collapse; width: 100%; }
+          body { font-family: "Noto Sans JP", sans-serif; padding: 20px; font-size: 16px; }
+          table { border-collapse: collapse; width: 100%; font-size: 15px; }
           th { background: #f8fafc; }
           thead th { position: sticky; top: 0; z-index: 2; }
           th.name-cell { position: sticky; left: 0; z-index: 3; background: #f8fafc; }
@@ -437,7 +437,7 @@ const openShiftVersionWindow = (
             padding: 6px 12px;
             cursor: pointer;
           }
-          select { padding: 4px 6px; border-radius: 6px; border: 1px solid #cbd5f5; }
+          select { padding: 4px 6px; border-radius: 6px; border: 1px solid #cbd5f5; font-size: 16px; }
           .summary-col { background: #f1f5f9; }
           .warning-panel { margin-top: 16px; padding: 12px; border: 1px solid #fca5a5; border-radius: 8px; background: #fef2f2; }
           .warning-panel h2 { margin: 0 0 8px; font-size: 14px; }
@@ -484,7 +484,6 @@ const openShiftVersionWindow = (
         <div class="shift-result-actions">
           <button id="save-shift">保存する</button>
           <button id="print-shift">印刷する</button>
-          <button id="regenerate-shift">作り直す</button>
         </div>
         <table>
           <thead>
@@ -836,16 +835,6 @@ const openShiftVersionWindow = (
               const modal = document.getElementById('print-modal');
               if (modal) modal.classList.remove('is-open');
               window.print();
-              return;
-            }
-            if (target.matches('#regenerate-shift')) {
-              const opener = window.opener;
-              if (!opener || typeof opener.regenerateShiftVersion !== 'function') return;
-              const nextWindow = window.open('', '_blank');
-              const versionLabel = await opener.regenerateShiftVersion({ targetWindow: nextWindow });
-              if (!versionLabel && nextWindow) {
-                nextWindow.close();
-              }
               return;
             }
             if (target.matches('.cell-fix-toggle')) {
