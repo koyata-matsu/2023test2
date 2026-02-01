@@ -369,7 +369,6 @@ const openShiftVersionWindow = (
             </div>
           </th>
           ${cells}
-          <td class="summary-col" data-summary="${rowIndex}" style="border:1px solid #d1d5db;padding:6px;text-align:center;">-</td>
         </tr>
       `;
     })
@@ -405,8 +404,6 @@ const openShiftVersionWindow = (
           th.name-cell { position: sticky; left: 0; z-index: 3; background: #f8fafc; }
           tbody th.name-cell { background: #fff; }
           tbody th.name-cell { position: sticky; left: 0; z-index: 1; }
-          tbody td.summary-col { position: sticky; right: 0; z-index: 1; background: #f1f5f9; }
-          thead th.summary-col { position: sticky; right: 0; z-index: 4; background: #f1f5f9; }
           th.shortage-col, td.shortage-col { background: #fee2e2; }
           td.fixed-cell { background: #fef08a; }
           .header-cell { display: flex; flex-direction: column; gap: 6px; }
@@ -440,7 +437,6 @@ const openShiftVersionWindow = (
           }
           select { padding: 4px 6px; border-radius: 6px; border: 1px solid #cbd5f5; font-size: 16px; }
           .cell-value { display: none; font-size: 16px; }
-          .summary-col { background: #f1f5f9; }
           .warning-panel { margin-top: 16px; padding: 12px; border: 1px solid #fca5a5; border-radius: 8px; background: #fef2f2; }
           .warning-panel h2 { margin: 0 0 8px; font-size: 14px; }
           .warning-panel ul { margin: 0; padding-left: 18px; font-size: 13px; }
@@ -474,7 +470,16 @@ const openShiftVersionWindow = (
             padding: 6px 12px;
             cursor: pointer;
           }
+          @page { size: A4 landscape; margin: 8mm; }
           @media print {
+            body {
+              padding: 0;
+              font-size: 11px;
+            }
+            table {
+              font-size: 10px;
+              width: 100%;
+            }
             .cell-fix-toggle,
             .shift-result-actions,
             .legend,
@@ -505,7 +510,6 @@ const openShiftVersionWindow = (
             <tr>
               <th class="name-cell" style="border:1px solid #d1d5db;padding:6px;text-align:left;">氏名</th>
               ${headers}
-              <th class="summary-col" style="border:1px solid #d1d5db;padding:6px;">合計</th>
             </tr>
           </thead>
           <tbody>
@@ -597,10 +601,6 @@ const openShiftVersionWindow = (
               if (select.value === "○") dayCount += 1;
               if (select.value === "●") nightCount += 1;
             });
-            const summary = row.querySelector('[data-summary]');
-            if (summary) {
-              summary.textContent = \`日:\${dayCount} / 夜:\${nightCount}\`;
-            }
             const rowIndex = row.dataset.row;
             if (rowIndex !== undefined) {
               const rowCount = row.querySelector(\`[data-row-count="\${rowIndex}"]\`);
@@ -640,8 +640,11 @@ const openShiftVersionWindow = (
             const row = target.closest('tr');
             if (!row) return;
             const colIndex = Number(cell.dataset.col);
-            const nextCell = row.querySelector(\`td[data-col="\${colIndex + 1}"] select[data-action="edit-cell"]\`);
+            const nextIndex = colIndex + 1;
+            const nextCell = row.querySelector(\`td[data-col="\${nextIndex}"] select[data-action="edit-cell"]\`);
             if (!nextCell || nextCell.disabled) return;
+            if (shiftPreferences?.[rowIndex]?.[nextIndex] === "off") return;
+            if (nextCell.value === "休") return;
             nextCell.value = "※";
             updateCellLabel(nextCell);
           };
