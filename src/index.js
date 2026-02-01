@@ -1769,6 +1769,9 @@ const generateAssignments = ({ randomize } = {}) => {
     });
   };
 
+  const isNextDayOff = (rowIndex, dayIndex) =>
+    state.shiftPreferences?.[rowIndex]?.[dayIndex + 1] === "off";
+
   const buildAvailable = (day) => {
     const availableDay = [];
     const availableNight = [];
@@ -1784,6 +1787,7 @@ const generateAssignments = ({ randomize } = {}) => {
       if (
         isShiftTypeAllowed(rowIndex, "night") &&
         !isOverMax(rowIndex, "night") &&
+        !isNextDayOff(rowIndex, day.index) &&
         !(
           assignments?.[rowIndex]?.[day.index + 1] &&
           assignments[rowIndex][day.index + 1] !== "※"
@@ -1817,6 +1821,7 @@ const generateAssignments = ({ randomize } = {}) => {
       if (isOverMax(rowIndex, shift)) continue;
       if (shift === "night" && lastNightDay[rowIndex] === dayIndex - 1) continue;
       if (shift === "night" && hasAdjacentNight(rowIndex, dayIndex)) continue;
+      if (shift === "night" && isNextDayOff(rowIndex, dayIndex)) continue;
       if (
         shift === "night" &&
         assignments?.[rowIndex]?.[dayIndex + 1] &&
@@ -1855,6 +1860,7 @@ const generateAssignments = ({ randomize } = {}) => {
         if (value !== "●") return;
         const nextIndex = colIndex + 1;
         if (nextIndex >= row.length) return;
+        if (isNextDayOff(rowIndex, colIndex)) return;
         if (row[nextIndex] === "●" || !row[nextIndex]) {
           row[nextIndex] = "※";
         }
@@ -1912,6 +1918,7 @@ const generateAssignments = ({ randomize } = {}) => {
           if (!isStaffAvailableForDay(person, day)) return false;
           const value = state.shiftPreferences?.[rowIndex]?.[day.index] || "";
           if (value === "off") return false;
+          if (isNextDayOff(rowIndex, day.index)) return false;
           if (hasAdjacentNight(rowIndex, day.index)) return false;
           return isShiftTypeAllowed(rowIndex, "night");
         })
@@ -1933,6 +1940,7 @@ const generateAssignments = ({ randomize } = {}) => {
           if (!isStaffAvailableForDay(person, day)) return false;
           const value = state.shiftPreferences?.[rowIndex]?.[day.index] || "";
           if (value === "off") return false;
+          if (isNextDayOff(rowIndex, day.index)) return false;
           return !hasAdjacentNight(rowIndex, day.index);
         })
         .map(({ rowIndex }) => rowIndex);
