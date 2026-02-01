@@ -136,13 +136,11 @@ const createEmptyStaff = () => ({
 });
 
 const state = {
-  view: "login",
+  view: "dashboard",
   owner: {
     email: "",
     password: ""
   },
-  authToken: "",
-  apiStatus: "unknown",
   staff: structuredClone(initialStaff),
   ownerMode: true,
   sheet: null,
@@ -287,64 +285,6 @@ const getShortageDays = () => {
 };
 
 const STORAGE_KEY = "shiftAppData";
-const AUTH_TOKEN_KEY = "shiftAuthToken";
-const API_BASE = window.SHIFT_API_BASE || "http://localhost:3001";
-
-const setAuthToken = (token) => {
-  state.authToken = token || "";
-  if (token) {
-    localStorage.setItem(AUTH_TOKEN_KEY, token);
-  } else {
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-  }
-};
-
-const apiRequest = async (path, options = {}) => {
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options.headers || {})
-  };
-  if (state.authToken) {
-    headers.Authorization = `Bearer ${state.authToken}`;
-  }
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers
-  });
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    const errorMessage = errorBody.error || "サーバーエラーが発生しました。";
-    throw new Error(errorMessage);
-  }
-  return response.json();
-};
-
-const checkApiHealth = async () => {
-  try {
-    const response = await fetch(`${API_BASE}/api/health`);
-    state.apiStatus = response.ok ? "online" : "error";
-  } catch (error) {
-    state.apiStatus = "offline";
-  }
-};
-
-const getApiStatusLabel = () => {
-  if (state.apiStatus === "online") return "サーバー接続: OK";
-  if (state.apiStatus === "offline") return "サーバー接続: 未接続";
-  if (state.apiStatus === "error") return "サーバー接続: エラー";
-  return "サーバー接続: 確認中";
-};
-
-const getApiStatusClass = () => {
-  if (state.apiStatus === "online") return "status-pill ok";
-  if (state.apiStatus === "offline") return "status-pill offline";
-  if (state.apiStatus === "error") return "status-pill error";
-  return "status-pill";
-};
-
-const getConnectionHelpMessage = () =>
-  "サーバーに接続できませんでした。公開サイトではAPIサーバーが必要です。npm run server を実行するか、SHIFT_API_BASE を正しいURLに設定してください。";
-
 const loadPersistedState = () => {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
@@ -355,39 +295,15 @@ const loadPersistedState = () => {
   };
 };
 
-const loadRemoteState = async () => {
-  if (!state.authToken) return null;
-  try {
-    return await apiRequest("/api/state");
-  } catch (error) {
-    state.warningMessage = "サーバーに接続できませんでした。ローカル保存で続行します。";
-    openDialog(".warning-dialog");
-    return null;
-  }
-};
-
 const persistState = () => {
   const payload = {
     groups: state.groups,
     sheets: state.sheets
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  if (state.authToken) {
-    apiRequest("/api/state", {
-      method: "PUT",
-      body: JSON.stringify(payload)
-    }).catch(() => {
-      state.warningMessage = "サーバーへの保存に失敗しました。";
-      openDialog(".warning-dialog");
-    });
-  }
 };
 
 const persistedState = loadPersistedState();
-const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
-if (storedToken) {
-  state.authToken = storedToken;
-}
 
 const openShiftVersionWindow = (versionLabel, targetWindow = null) => {
   if (!state.sheet) return;
@@ -993,80 +909,6 @@ const renderSidePanel = () => `
   </aside>
 `;
 
-const renderLogin = () => `
-  <div class="page login">
-    <header class="app-header">
-      <div>
-        <p class="eyebrow">バイトシフト調整</p>
-        <h1>ログイン</h1>
-      </div>
-      <span class="${getApiStatusClass()}">${getApiStatusLabel()}</span>
-    </header>
-    <section class="card">
-      <label>
-        メールアドレス
-        <input id="owner-email" type="email" placeholder="owner@example.com" value="${
-          state.owner.email
-        }" />
-      </label>
-      <label>
-        パスワード
-        <input id="owner-password" type="password" placeholder="8文字以上" value="${
-          state.owner.password
-        }" />
-      </label>
-      <div class="button-row">
-        <button class="primary" id="login-owner">ログイン</button>
-        <button class="ghost" id="go-register">新規登録</button>
-        <button class="ghost" id="enter-guest">公開モードで閲覧</button>
-      </div>
-      <p class="helper-text">
-        ログインできない場合は公開モードで閲覧できます（編集はできません）。
-      </p>
-      <p class="helper-text">
-        ${state.apiStatus === "offline" ? getConnectionHelpMessage() : ""}
-      </p>
-      <p class="helper-text">別端末でも使うにはサーバー接続が必要です。</p>
-    </section>
-  </div>
-`;
-
-const renderRegister = () => `
-  <div class="page login">
-    <header class="app-header">
-      <div>
-        <p class="eyebrow">バイトシフト調整</p>
-        <h1>新規登録</h1>
-      </div>
-      <div class="header-actions">
-        <span class="${getApiStatusClass()}">${getApiStatusLabel()}</span>
-        <button class="ghost" id="back-to-login">ログインへ戻る</button>
-      </div>
-    </header>
-    <section class="card">
-      <label>
-        メールアドレス
-        <input id="owner-email" type="email" placeholder="owner@example.com" value="${
-          state.owner.email
-        }" />
-      </label>
-      <label>
-        パスワード
-        <input id="owner-password" type="password" placeholder="8文字以上" value="${
-          state.owner.password
-        }" />
-      </label>
-      <div class="button-row">
-        <button class="primary" id="register-owner">登録する</button>
-      </div>
-      <p class="helper-text">
-        ${state.apiStatus === "offline" ? getConnectionHelpMessage() : ""}
-      </p>
-      <p class="helper-text">登録後、そのままログインして同期を開始します。</p>
-    </section>
-  </div>
-`;
-
 const renderStaffRows = () => {
   return state.staff
     .map(
@@ -1203,13 +1045,7 @@ const renderGroupList = () => `
     <header class="app-header">
       <div>
         <p class="eyebrow">グループ一覧</p>
-        <h1>${state.ownerMode ? state.owner.email || "シフト管理" : "公開モード"}</h1>
-      </div>
-      <div class="header-actions">
-        ${state.ownerMode
-          ? `<button class="ghost" id="logout">ログアウト</button>`
-          : `<button class="ghost" id="back-to-login">ログインへ戻る</button>`}
-        ${!state.ownerMode ? `<span class="mode-pill">閲覧専用</span>` : ""}
+        <h1>シフト管理</h1>
       </div>
     </header>
 
@@ -1224,11 +1060,7 @@ const renderGroupList = () => `
               state.ownerMode ? "" : "disabled"
             }>シフトシートを作成する</button>
           </div>
-          <span class="helper-text">${
-            state.ownerMode
-              ? "グループを選んで編集・シフト作成ができます。"
-              : "公開モードでは閲覧のみ可能です。編集にはログインが必要です。"
-          }</span>
+          <span class="helper-text">グループを選んで編集・シフト作成ができます。</span>
         </section>
 
         <section class="sheet-list">
@@ -1531,11 +1363,7 @@ const renderConfirmDialog = () => `
 
 const renderApp = () => {
   let content = "";
-  if (state.view === "login") {
-    content = renderLogin();
-  } else if (state.view === "register") {
-    content = renderRegister();
-  } else if (state.view === "group") {
+  if (state.view === "group") {
     content = renderGroupCreation();
   } else if (state.view === "dashboard") {
     content = renderDashboard();
@@ -1650,35 +1478,6 @@ const closeDialog = (selector) => {
   if (dialog instanceof HTMLDialogElement) {
     dialog.close();
   }
-};
-
-const resetState = () => {
-  state.view = "login";
-  state.owner = { email: "", password: "" };
-  state.staff = structuredClone(initialStaff);
-  state.ownerMode = true;
-  state.sheet = null;
-  const persisted = loadPersistedState();
-  state.sheets = persisted?.sheets ?? [];
-  state.groups = persisted?.groups ?? [];
-  state.groupDraftName = "";
-  state.currentSheetId = null;
-  state.fixedDays = new Set();
-  state.fixedCells = new Set();
-  state.blockedDays = new Set();
-  state.shiftPreferences = [];
-  state.assignments = [];
-  state.shiftVersions = [];
-  state.warningMessage = "入力内容を確認してください。";
-  state.confirmMessage = "";
-  state.pendingShift = false;
-  state.loadingShift = false;
-  state.lastShiftAttempts = null;
-  state.lastShiftAttemptLimit = null;
-  state.lastShiftSucceeded = null;
-  state.lastShiftError = "";
-  state.selectedGroup = "";
-  renderApp();
 };
 
 const moveStaffRow = (rowIndex, direction) => {
@@ -2251,98 +2050,6 @@ const openSettingsPanel = (rowIndex) => {
   panel.showModal();
 };
 
-const startOwnerSession = () => {
-  state.view = "dashboard";
-  state.ownerMode = true;
-  renderApp();
-};
-
-const startGuestSession = () => {
-  state.view = "dashboard";
-  state.ownerMode = false;
-  setAuthToken("");
-  state.sheet = null;
-  state.currentSheetId = null;
-  state.selectedGroup = "";
-  const persisted = loadPersistedState();
-  state.groups = persisted?.groups ?? [];
-  state.sheets = persisted?.sheets ?? [];
-  renderApp();
-};
-
-const validateOwnerFields = () => {
-  const { email, password } = state.owner;
-  return email && password;
-};
-
-const syncOwnerState = async () => {
-  const remote = await loadRemoteState();
-  if (remote) {
-    state.groups = remote.groups;
-    state.sheets = remote.sheets;
-    return true;
-  }
-  if (persistedState) {
-    state.groups = persistedState.groups;
-    state.sheets = persistedState.sheets;
-  }
-  return false;
-};
-
-const loginOwner = async ({ email, password }) => {
-  if (state.apiStatus === "offline") {
-    state.warningMessage = getConnectionHelpMessage();
-    openDialog(".warning-dialog");
-    return;
-  }
-  try {
-    const response = await apiRequest("/api/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password })
-    });
-    setAuthToken(response.token);
-    state.owner.email = response.email;
-    state.owner.password = "";
-    await syncOwnerState();
-    startOwnerSession();
-  } catch (error) {
-    state.warningMessage =
-      error instanceof TypeError
-        ? getConnectionHelpMessage()
-        : error.message || "ログインに失敗しました。";
-    openDialog(".warning-dialog");
-  }
-};
-
-const registerOwner = async ({ email, password }) => {
-  if (state.apiStatus === "offline") {
-    state.warningMessage = getConnectionHelpMessage();
-    openDialog(".warning-dialog");
-    return;
-  }
-  try {
-    await apiRequest("/api/register", {
-      method: "POST",
-      body: JSON.stringify({ email, password })
-    });
-    await loginOwner({ email, password });
-  } catch (error) {
-    state.warningMessage =
-      error instanceof TypeError
-        ? getConnectionHelpMessage()
-        : error.message || "登録に失敗しました。";
-    openDialog(".warning-dialog");
-  }
-};
-
-const logoutOwner = async () => {
-  if (state.authToken) {
-    apiRequest("/api/logout", { method: "POST" }).catch(() => {});
-  }
-  setAuthToken("");
-  resetState();
-};
-
 const openSheetFromList = (sheetId) => {
   const sheet = state.sheets.find((item) => item.id === sheetId);
   if (!sheet) return;
@@ -2403,73 +2110,20 @@ const openSheetFromList = (sheetId) => {
   renderApp();
 };
 
-const initApp = async () => {
-  await checkApiHealth();
-  if (state.authToken) {
-    try {
-      const profile = await apiRequest("/api/me");
-      state.owner.email = profile.email;
-      await syncOwnerState();
-      state.view = "dashboard";
-    } catch (error) {
-      setAuthToken("");
-      if (persistedState) {
-        state.groups = persistedState.groups;
-        state.sheets = persistedState.sheets;
-      }
-    }
-  } else if (persistedState) {
+const initApp = () => {
+  if (persistedState) {
     state.groups = persistedState.groups;
     state.sheets = persistedState.sheets;
   }
+  state.view = "dashboard";
   renderApp();
 };
 
-void initApp();
+initApp();
 
 document.body.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
-
-  if (target.id === "go-register") {
-    state.view = "register";
-    renderApp();
-    return;
-  }
-
-  if (target.id === "back-to-login") {
-    state.view = "login";
-    renderApp();
-    return;
-  }
-
-  if (target.id === "enter-guest") {
-    startGuestSession();
-    return;
-  }
-
-  if (target.id === "login-owner" || target.id === "register-owner") {
-    const emailInput = document.getElementById("owner-email");
-    const passwordInput = document.getElementById("owner-password");
-    if (
-      emailInput instanceof HTMLInputElement &&
-      passwordInput instanceof HTMLInputElement
-    ) {
-      const email = emailInput.value.trim();
-      const password = passwordInput.value.trim();
-      state.owner = { email, password };
-      if (!validateOwnerFields()) {
-        state.warningMessage = "メールアドレスとパスワードを入力してください。";
-        openDialog(".warning-dialog");
-        return;
-      }
-      if (target.id === "register-owner") {
-        void registerOwner({ email, password });
-      } else {
-        void loginOwner({ email, password });
-      }
-    }
-  }
 
   if (target.id === "create-group") {
     if (!state.ownerMode) return;
@@ -2605,10 +2259,6 @@ document.body.addEventListener("click", (event) => {
     state.shiftPreferences[rowIndex][colIndex] =
       state.shiftPreferences[rowIndex][colIndex] === "off" ? "" : "off";
     renderAppPreserveScroll();
-  }
-
-  if (target.id === "logout") {
-    void logoutOwner();
   }
 
   if (target.id === "reset-sheet") {
