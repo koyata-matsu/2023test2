@@ -360,8 +360,13 @@ const openShiftVersionWindow = (
         })
         .join("");
       return `
-        <tr>
-          <th style="border:1px solid #d1d5db;padding:6px;text-align:left;">${person.name}</th>
+        <tr data-row="${rowIndex}">
+          <th class="name-cell" style="border:1px solid #d1d5db;padding:6px;text-align:left;">
+            <div class="name-cell-content">
+              <span>${person.name}</span>
+              <span class="row-counts" data-row-count="${rowIndex}">日:0 / 夜:0</span>
+            </div>
+          </th>
           ${cells}
           <td class="summary-col" data-summary="${rowIndex}" style="border:1px solid #d1d5db;padding:6px;text-align:center;">-</td>
         </tr>
@@ -378,6 +383,7 @@ const openShiftVersionWindow = (
                 <div>${day.dateLabel}</div>
                 <div class="weekday">${day.weekday}</div>
                 <div class="required-counts">日:${day.requiredDay} 夜:${day.requiredNight}</div>
+                <div class="actual-counts" data-actual-col="${day.index}">日:0 夜:0</div>
               </div>
               
             </div>
@@ -394,11 +400,20 @@ const openShiftVersionWindow = (
           body { font-family: "Noto Sans JP", sans-serif; padding: 20px; }
           table { border-collapse: collapse; width: 100%; }
           th { background: #f8fafc; }
+          thead th { position: sticky; top: 0; z-index: 2; }
+          th.name-cell { position: sticky; left: 0; z-index: 3; background: #f8fafc; }
+          tbody th.name-cell { background: #fff; }
+          tbody th.name-cell { position: sticky; left: 0; z-index: 1; }
+          tbody td.summary-col { position: sticky; right: 0; z-index: 1; background: #f1f5f9; }
+          thead th.summary-col { position: sticky; right: 0; z-index: 4; background: #f1f5f9; }
           th.shortage-col, td.shortage-col { background: #fee2e2; }
           td.fixed-cell { background: #fef08a; }
           .header-cell { display: flex; flex-direction: column; gap: 6px; }
           .header-cell .weekday { font-size: 12px; color: #64748b; }
           .header-cell .required-counts { font-size: 11px; color: #475569; }
+          .header-cell .actual-counts { font-size: 11px; color: #1d4ed8; }
+          .name-cell-content { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+          .row-counts { font-size: 12px; color: #1d4ed8; white-space: nowrap; }
           .cell-fix-toggle {
             border: 1px solid #cbd5f5;
             background: #fff;
@@ -474,7 +489,7 @@ const openShiftVersionWindow = (
         <table>
           <thead>
             <tr>
-              <th style="border:1px solid #d1d5db;padding:6px;text-align:left;">氏名</th>
+              <th class="name-cell" style="border:1px solid #d1d5db;padding:6px;text-align:left;">氏名</th>
               ${headers}
               <th class="summary-col" style="border:1px solid #d1d5db;padding:6px;">合計</th>
             </tr>
@@ -557,6 +572,13 @@ const openShiftVersionWindow = (
             const summary = row.querySelector('[data-summary]');
             if (summary) {
               summary.textContent = \`日:\${dayCount} / 夜:\${nightCount}\`;
+            }
+            const rowIndex = row.dataset.row;
+            if (rowIndex !== undefined) {
+              const rowCount = row.querySelector(\`[data-row-count="\${rowIndex}"]\`);
+              if (rowCount) {
+                rowCount.textContent = \`日:\${dayCount} / 夜:\${nightCount}\`;
+              }
             }
             return { dayCount, nightCount };
           };
@@ -698,6 +720,10 @@ const openShiftVersionWindow = (
               updateColumnClasses(index, {
                 shortage
               });
+              const actualCell = document.querySelector(\`[data-actual-col="\${index}"]\`);
+              if (actualCell) {
+                actualCell.textContent = \`日:\${dayCounts[index]} 夜:\${nightCounts[index]}\`;
+              }
               if (shortage) {
                 const reasons = buildShortageReasons(index, rowCounts);
                 warnings.push(\`\${dayLabels[index]}: 日勤 \${dayCounts[index]}/\${required}, 夜勤 \${nightCounts[index]}/\${requiredNight[index]} が不足\`);
@@ -927,12 +953,11 @@ const renderSidePanel = () => `
                       (item) => `
                         <div class="sheet-card">
                           <div>
-                            <h3>${item.name}</h3>
                             <p class="sheet-meta">保存: ${formatTimestamp(item.createdAt)}</p>
                           </div>
                           <div class="sheet-actions">
                             <button class="ghost" data-action="open-saved-shift" data-id="${item.id}">
-                              開く
+                              ${item.name}
                             </button>
                           </div>
                         </div>
