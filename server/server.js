@@ -1,3 +1,5 @@
+require("dotenv").config(); // ← これ超重要
+
 const crypto = require("crypto");
 const express = require("express");
 const cors = require("cors");
@@ -13,13 +15,14 @@ app.use(express.json({ limit: "2mb" }));
 // ===============================
 // Supabase(Postgres) 接続
 // ===============================
+if (!process.env.DATABASE_URL) {
+  console.error("DATABASE_URL is not set");
+  process.exit(1);
+}
+
 const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: Number(process.env.DB_PORT),
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  ssl: { rejectUnauthorized: false }
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
 });
 
 // 起動時接続チェック
@@ -29,6 +32,7 @@ const pool = new Pool({
     console.log("Supabase DB OK:", r.rows[0]);
   } catch (e) {
     console.error("Supabase DB NG:", e);
+    process.exit(1);
   }
 })();
 
@@ -67,6 +71,7 @@ const authMiddleware = async (req, res, next) => {
     req.token = m[1];
     next();
   } catch (e) {
+    console.error(e);
     return res.status(500).json({ error: "server_error" });
   }
 };
@@ -94,6 +99,7 @@ app.post("/api/register", async (req, res) => {
     );
     res.json({ ok: true });
   } catch (e) {
+    console.error(e);
     if (String(e).includes("unique")) {
       return res.status(409).json({ error: "このメールアドレスは既に登録済みです。" });
     }
@@ -132,6 +138,7 @@ app.post("/api/login", async (req, res) => {
 
     res.json({ token, email });
   } catch (e) {
+    console.error(e);
     res.status(500).json({ error: "server_error" });
   }
 });
@@ -144,6 +151,7 @@ app.post("/api/logout", authMiddleware, async (req, res) => {
     await pool.query("delete from sessions where token = $1", [req.token]);
     res.json({ ok: true });
   } catch (e) {
+    console.error(e);
     res.status(500).json({ error: "server_error" });
   }
 });
@@ -169,6 +177,7 @@ app.get("/api/state", authMiddleware, async (req, res) => {
     }
     res.json(r.rows[0].payload);
   } catch (e) {
+    console.error(e);
     res.status(500).json({ error: "server_error" });
   }
 });
@@ -185,6 +194,7 @@ app.put("/api/state", authMiddleware, async (req, res) => {
     );
     res.json({ ok: true });
   } catch (e) {
+    console.error(e);
     res.status(500).json({ error: "server_error" });
   }
 });
