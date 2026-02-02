@@ -1,63 +1,40 @@
-const path = require("path");
 const crypto = require("crypto");
 const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
-const sqlite3 = require("sqlite3").verbose();
+const { Pool } = require("pg");
 
 const PORT = process.env.PORT || 3001;
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, "shift.db");
 
 const app = express();
-const db = new sqlite3.Database(DB_PATH);
-
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: "2mb" }));
 
-db.serialize(() => {
-  db.run(
-    `CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      email TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    )`
-  );
-  db.run(
-    `CREATE TABLE IF NOT EXISTS sessions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      token TEXT UNIQUE NOT NULL,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY(user_id) REFERENCES users(id)
-    )`
-  );
-  db.run(
-    `CREATE TABLE IF NOT EXISTS states (
-      user_id INTEGER PRIMARY KEY,
-      payload TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY(user_id) REFERENCES users(id)
-    )`
-  );
+// ===============================
+// Supabase(Postgres) 接続
+// ===============================
+const pool = new Pool({
+  host: process.env.DB_HOST,
+  port: Number(process.env.DB_PORT),
+  database: process.env.DB_NAME,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  ssl: { rejectUnauthorized: false }
 });
 
-const runAsync = (sql, params = []) =>
-  new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) reject(err);
-      else resolve(this);
-    });
-  });
+// 起動時接続チェック
+(async () => {
+  try {
+    const r = await pool.query("select now()");
+    console.log("Supabase DB OK:", r.rows[0]);
+  } catch (e) {
+    console.error("Supabase DB NG:", e);
+  }
+})();
 
-const getAsync = (sql, params = []) =>
-  new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
-    });
-  });
-
+// ===============================
+// 共通
+// ===============================
 const validateCredentials = (email, password) => {
   if (!email || !password) return "メールアドレスとパスワードを入力してください。";
   if (!email.includes("@")) return "メールアドレスの形式が正しくありません。";
@@ -65,121 +42,156 @@ const validateCredentials = (email, password) => {
   return null;
 };
 
+// ===============================
+// 認証 middleware
+// ===============================
 const authMiddleware = async (req, res, next) => {
   const header = req.headers.authorization || "";
-  const match = header.match(/^Bearer\s+(.+)$/);
-  if (!match) return res.status(401).json({ error: "unauthorized" });
-  const token = match[1];
+  const m = header.match(/^Bearer\s+(.+)$/);
+  if (!m) return res.status(401).json({ error: "unauthorized" });
+
   try {
-    const session = await getAsync(
-      `SELECT sessions.user_id AS user_id, users.email AS email
-       FROM sessions
-       JOIN users ON users.id = sessions.user_id
-       WHERE sessions.token = ?`,
-      [token]
+    const r = await pool.query(
+      `select users.id as user_id, users.email
+       from sessions
+       join users on users.id = sessions.user_id
+       where sessions.token = $1`,
+      [m[1]]
     );
-    if (!session) return res.status(401).json({ error: "unauthorized" });
-    req.user = session;
-    req.token = token;
-    return next();
-  } catch (error) {
+
+    if (r.rows.length === 0) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+
+    req.user = r.rows[0];
+    req.token = m[1];
+    next();
+  } catch (e) {
     return res.status(500).json({ error: "server_error" });
   }
 };
 
+// ===============================
+// health
+// ===============================
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 
+// ===============================
+// register
+// ===============================
 app.post("/api/register", async (req, res) => {
   const { email, password } = req.body || {};
-  const validationError = validateCredentials(email, password);
-  if (validationError) return res.status(400).json({ error: validationError });
+  const err = validateCredentials(email, password);
+  if (err) return res.status(400).json({ error: err });
+
   try {
-    const passwordHash = await bcrypt.hash(password, 10);
-    await runAsync(
-      "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
-      [email, passwordHash, new Date().toISOString()]
+    const hash = await bcrypt.hash(password, 10);
+    await pool.query(
+      "insert into users (email, password_hash) values ($1, $2)",
+      [email, hash]
     );
-    return res.json({ ok: true });
-  } catch (error) {
-    if (String(error).includes("UNIQUE")) {
+    res.json({ ok: true });
+  } catch (e) {
+    if (String(e).includes("unique")) {
       return res.status(409).json({ error: "このメールアドレスは既に登録済みです。" });
     }
-    return res.status(500).json({ error: "server_error" });
+    res.status(500).json({ error: "server_error" });
   }
 });
 
+// ===============================
+// login
+// ===============================
 app.post("/api/login", async (req, res) => {
   const { email, password } = req.body || {};
-  const validationError = validateCredentials(email, password);
-  if (validationError) return res.status(400).json({ error: validationError });
+  const err = validateCredentials(email, password);
+  if (err) return res.status(400).json({ error: err });
+
   try {
-    const user = await getAsync(
-      "SELECT id, email, password_hash FROM users WHERE email = ?",
+    const r = await pool.query(
+      "select id, password_hash from users where email = $1",
       [email]
     );
-    if (!user) return res.status(401).json({ error: "認証に失敗しました。" });
+    if (r.rows.length === 0) {
+      return res.status(401).json({ error: "認証に失敗しました。" });
+    }
+
+    const user = r.rows[0];
     const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) return res.status(401).json({ error: "認証に失敗しました。" });
+    if (!ok) {
+      return res.status(401).json({ error: "認証に失敗しました。" });
+    }
+
     const token = crypto.randomUUID();
-    await runAsync(
-      "INSERT INTO sessions (user_id, token, created_at) VALUES (?, ?, ?)",
-      [user.id, token, new Date().toISOString()]
+    await pool.query(
+      "insert into sessions (token, user_id) values ($1, $2)",
+      [token, user.id]
     );
-    return res.json({ token, email: user.email });
-  } catch (error) {
-    return res.status(500).json({ error: "server_error" });
+
+    res.json({ token, email });
+  } catch (e) {
+    res.status(500).json({ error: "server_error" });
   }
 });
 
+// ===============================
+// logout
+// ===============================
 app.post("/api/logout", authMiddleware, async (req, res) => {
   try {
-    await runAsync("DELETE FROM sessions WHERE token = ?", [req.token]);
-    return res.json({ ok: true });
-  } catch (error) {
-    return res.status(500).json({ error: "server_error" });
+    await pool.query("delete from sessions where token = $1", [req.token]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: "server_error" });
   }
 });
 
+// ===============================
+// me
+// ===============================
 app.get("/api/me", authMiddleware, (req, res) => {
   res.json({ email: req.user.email });
 });
 
+// ===============================
+// state（永続）
+// ===============================
 app.get("/api/state", authMiddleware, async (req, res) => {
   try {
-    const row = await getAsync("SELECT payload FROM states WHERE user_id = ?", [
-      req.user.user_id
-    ]);
-    if (!row) {
+    const r = await pool.query(
+      "select payload from states where user_id = $1",
+      [req.user.user_id]
+    );
+    if (r.rows.length === 0) {
       return res.json({ groups: [], sheets: [] });
     }
-    const payload = JSON.parse(row.payload);
-    return res.json({
-      groups: Array.isArray(payload.groups) ? payload.groups : [],
-      sheets: Array.isArray(payload.sheets) ? payload.sheets : []
-    });
-  } catch (error) {
-    return res.status(500).json({ error: "server_error" });
+    res.json(r.rows[0].payload);
+  } catch (e) {
+    res.status(500).json({ error: "server_error" });
   }
 });
 
 app.put("/api/state", authMiddleware, async (req, res) => {
-  const { groups = [], sheets = [] } = req.body || {};
+  const payload = req.body || {};
   try {
-    const payload = JSON.stringify({ groups, sheets });
-    await runAsync(
-      `INSERT INTO states (user_id, payload, updated_at)
-       VALUES (?, ?, ?)
-       ON CONFLICT(user_id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`,
-      [req.user.user_id, payload, new Date().toISOString()]
+    await pool.query(
+      `insert into states (user_id, payload, updated_at)
+       values ($1, $2, now())
+       on conflict (user_id)
+       do update set payload = excluded.payload, updated_at = now()`,
+      [req.user.user_id, payload]
     );
-    return res.json({ ok: true });
-  } catch (error) {
-    return res.status(500).json({ error: "server_error" });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: "server_error" });
   }
 });
 
+// ===============================
+// start
+// ===============================
 app.listen(PORT, () => {
   console.log(`Shift API server running on http://localhost:${PORT}`);
 });
