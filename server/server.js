@@ -36,7 +36,7 @@ const pool = new Pool({
 // 共通
 // ===============================
 const validateCredentials = (email, password) => {
-  if (!email || !password) return "メールアドレスとパスワードを入力してく。";
+  if (!email || !password) return "メールアドレスとパスワードを入力してください。";
   if (!email.includes("@")) return "メールアドレスの形式が正しくありません。";
   if (password.length < 8) return "パスワードは8文字以上にしてください。";
   return null;
