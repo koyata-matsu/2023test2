@@ -13,6 +13,7 @@
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "parcel-bundler": "^1.6.1",
+    "pg": "^8.18.0",
     "sqlite3": "^5.1.7"
   },
   "devDependencies": {
@@ -22,5 +23,8 @@
   "resolutions": {
     "@babel/preset-env": "7.13.8"
   },
-  "keywords": ["javascript", "starter"]
+  "keywords": [
+    "javascript",
+    "starter"
+  ]
 }
