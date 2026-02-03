@@ -1,13 +1,47 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="ja">
 <head>
-	<title>Parcel Sandbox</title>
-	<meta charset="UTF-8" />
+  <meta charset="UTF-8" />
+  <title>Shift Maker</title>
+
+  <!-- API の場所 -->
+  <script>
+    window.SHIFT_API_BASE = "https://shiftmaker-yyq8.onrender.com";
+  </script>
+
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f5f5f5;
+      padding: 40px;
+    }
+    .card {
+      max-width: 400px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+    }
+    input, button {
+      width: 100%;
+      margin: 8px 0;
+      padding: 10px;
+    }
+    button { cursor: pointer; }
+    .hidden { display: none; }
+  </style>
 </head>
 
 <body>
-	<div id="app"></div>
+  <!-- ログイン画面 -->
+  <div id="login" class="card">
+    <h2>ログイン</h2>
+    <input id="email" type="email" placeholder="メールアドレス" />
+    <input id="password" type="password" placeholder="パスワード（8文字以上）" />
+    <button onclick="login()">ログイン</button>
+    <button onclick="register()">新規登録</button>
+    <p id="error" style="color:red;"></p>
+  </div>
 
 	<script>
 		window.SHIFT_API_BASE = "https://shiftmaker-yyq8.onrender.com";
@@ -16,4 +50,48 @@
 	</script>
 </body>
 
+      const res = await fetch(API + "/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailVal, password: passwordVal })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        document.getElementById("error").innerText = data.error;
+        return;
+      }
+
+      alert("登録完了。ログインしてください。");
+    };
+
+    window.logout = function () {
+      localStorage.removeItem(tokenKey);
+      location.reload();
+    };
+
+    function showApp(email) {
+      document.getElementById("login").classList.add("hidden");
+      document.getElementById("app").classList.remove("hidden");
+      document.getElementById("welcome").innerText = "ログイン中：" + email;
+    }
+
+    // 起動時にログイン状態チェック
+    async function init() {
+      const token = localStorage.getItem(tokenKey);
+      if (!token) return;
+
+      const res = await fetch(API + "/api/me", {
+        headers: { Authorization: "Bearer " + token }
+      });
+
+      if (!res.ok) return;
+
+      const data = await res.json();
+      showApp(data.email);
+    }
+
+    init();
+  </script>
+</body>
 </html>
