@@ -137,10 +137,6 @@ const createEmptyStaff = () => ({
 
 const state = {
   view: "dashboard",
-  owner: {
-    email: "",
-    password: ""
-  },
   staff: structuredClone(initialStaff),
   ownerMode: true,
   sheet: null,
@@ -158,8 +154,6 @@ const state = {
   confirmMessage: "",
   pendingShift: false,
   loadingShift: false,
-  loadingAuth: false,
-  loadingAuthMessage: "",
   toast: null,
   lastShiftAttempts: null,
   lastShiftAttemptLimit: null,
@@ -1178,7 +1172,7 @@ const renderGroupList = () => `
         <h1>シフト管理</h1>
       </div>
       <div class="header-actions">
-        <span class="mode-pill">ログイン不要</span>
+        <span class="mode-pill">ローカル保存</span>
       </div>
     </header>
 
@@ -1504,10 +1498,8 @@ const renderToast = () => {
 };
 
 const renderLoadingOverlay = () => {
-  if (!state.loadingShift && !state.loadingAuth) return "";
-  const message = state.loadingShift
-    ? "シフト作成中..."
-    : state.loadingAuthMessage || "処理中...";
+  if (!state.loadingShift) return "";
+  const message = "シフト作成中...";
   return `
     <div class="loading-overlay" role="status" aria-live="polite">
       <div class="loading-card">
@@ -1648,7 +1640,6 @@ const closeDialog = (selector) => {
 
 const resetState = () => {
   state.view = "dashboard";
-  state.owner = { email: "", password: "" };
   state.staff = structuredClone(initialStaff);
   state.ownerMode = true;
   state.sheet = null;
@@ -1667,8 +1658,6 @@ const resetState = () => {
   state.confirmMessage = "";
   state.pendingShift = false;
   state.loadingShift = false;
-  state.loadingAuth = false;
-  state.loadingAuthMessage = "";
   state.toast = null;
   state.lastShiftAttempts = null;
   state.lastShiftAttemptLimit = null;
@@ -2159,108 +2148,6 @@ const openSettingsPanel = (rowIndex) => {
   panel.showModal();
 };
 
-const startGuestSession = () => {
-  state.view = "dashboard";
-  state.ownerMode = false;
-  setAuthToken("");
-  state.sheet = null;
-  state.currentSheetId = null;
-  state.selectedGroup = "";
-  const persisted = loadPersistedState();
-  state.groups = persisted?.groups ?? [];
-  state.sheets = persisted?.sheets ?? [];
-  renderApp();
-};
-
-const validateOwnerFields = () => {
-  const { email, password } = state.owner;
-  return email && password;
-};
-
-const syncOwnerState = async () => {
-  const remote = await loadRemoteState();
-  if (remote) {
-    state.groups = remote.groups;
-    state.sheets = remote.sheets;
-    return true;
-  }
-  if (persistedState) {
-    state.groups = persistedState.groups;
-    state.sheets = persistedState.sheets;
-  }
-  return false;
-};
-
-const loginOwner = async ({ email, password }) => {
-  if (state.apiStatus === "offline") {
-    state.warningMessage = getConnectionHelpMessage();
-    openDialog(".warning-dialog");
-    return;
-  }
-  state.loadingAuth = true;
-  state.loadingAuthMessage = "ログイン中...";
-  renderApp();
-  try {
-    const response = await apiRequest("/api/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password })
-    });
-    setAuthToken(response.token);
-    state.owner.email = response.email;
-    state.owner.password = "";
-    await syncOwnerState();
-    state.loadingAuth = false;
-    state.loadingAuthMessage = "";
-    startOwnerSession();
-    showToast("ログインしました。", "success");
-  } catch (error) {
-    state.loadingAuth = false;
-    state.loadingAuthMessage = "";
-    state.warningMessage =
-      error instanceof TypeError
-        ? getConnectionHelpMessage()
-        : error.message || "ログインに失敗しました。";
-    openDialog(".warning-dialog");
-  }
-};
-
-const registerOwner = async ({ email, password }) => {
-  if (state.apiStatus === "offline") {
-    state.warningMessage = getConnectionHelpMessage();
-    openDialog(".warning-dialog");
-    return;
-  }
-  state.loadingAuth = true;
-  state.loadingAuthMessage = "登録中...";
-  renderApp();
-  try {
-    await apiRequest("/api/register", {
-      method: "POST",
-      body: JSON.stringify({ email, password })
-    });
-    state.loadingAuth = false;
-    state.loadingAuthMessage = "";
-    await loginOwner({ email, password });
-  } catch (error) {
-    state.loadingAuth = false;
-    state.loadingAuthMessage = "";
-    state.warningMessage =
-      error instanceof TypeError
-        ? getConnectionHelpMessage()
-        : error.message || "登録に失敗しました。";
-    openDialog(".warning-dialog");
-  }
-};
-
-const logoutOwner = async () => {
-  if (state.authToken) {
-    apiRequest("/api/logout", { method: "POST" }).catch(() => {});
-  }
-  setAuthToken("");
-  resetState();
-  showToast("ログアウトしました。", "success");
-};
-
 const openSheetFromList = (sheetId) => {
   const sheet = state.sheets.find((item) => item.id === sheetId);
   if (!sheet) return;
@@ -2322,8 +2209,6 @@ const openSheetFromList = (sheetId) => {
 };
 
 const initApp = async () => {
-  await checkApiHealth();
-  setAuthToken("");
   state.ownerMode = true;
   if (persistedState) {
     state.groups = persistedState.groups;
