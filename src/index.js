@@ -136,7 +136,7 @@ const createEmptyStaff = () => ({
 });
 
 const state = {
-  view: "login",
+  view: "dashboard",
   owner: {
     email: "",
     password: ""
@@ -1206,13 +1206,10 @@ const renderGroupList = () => `
     <header class="app-header">
       <div>
         <p class="eyebrow">グループ一覧</p>
-        <h1>${state.ownerMode ? state.owner.email || "シフト管理" : "公開モード"}</h1>
+        <h1>シフト管理</h1>
       </div>
       <div class="header-actions">
-        ${state.ownerMode
-          ? `<button class="ghost" id="logout">ログアウト</button>`
-          : `<button class="ghost" id="back-to-login">ログインへ戻る</button>`}
-        ${!state.ownerMode ? `<span class="mode-pill">閲覧専用</span>` : ""}
+        <span class="mode-pill">ログイン不要</span>
       </div>
     </header>
 
@@ -2310,12 +2307,6 @@ const openSettingsPanel = (rowIndex) => {
   panel.showModal();
 };
 
-const startOwnerSession = () => {
-  state.view = "dashboard";
-  state.ownerMode = true;
-  renderApp();
-};
-
 const startGuestSession = () => {
   state.view = "dashboard";
   state.ownerMode = false;
@@ -2480,23 +2471,13 @@ const openSheetFromList = (sheetId) => {
 
 const initApp = async () => {
   await checkApiHealth();
-  if (state.authToken) {
-    try {
-      const profile = await apiRequest("/api/me");
-      state.owner.email = profile.email;
-      await syncOwnerState();
-      state.view = "dashboard";
-    } catch (error) {
-      setAuthToken("");
-      if (persistedState) {
-        state.groups = persistedState.groups;
-        state.sheets = persistedState.sheets;
-      }
-    }
-  } else if (persistedState) {
+  setAuthToken("");
+  state.ownerMode = true;
+  if (persistedState) {
     state.groups = persistedState.groups;
     state.sheets = persistedState.sheets;
   }
+  state.view = "dashboard";
   renderApp();
 };
 
