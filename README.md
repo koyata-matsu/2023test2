@@ -14,7 +14,7 @@ npm run server
 ```
 
 ## 公開用セットアップ（SHIFT_API_BASE の設定）
-ログイン・新規登録を公開環境で動かす場合は、フロント側で API の URL を指定する必要があります。
+別端末でも同じデータを使いたい場合は、フロント側で API の URL を指定します。
 
 ### 1) `index.html` に API URL を設定
 `index.html` の `src/index.js` より前に、次のスクリプトを追加してください。
