@@ -158,6 +158,9 @@ const state = {
   confirmMessage: "",
   pendingShift: false,
   loadingShift: false,
+  loadingAuth: false,
+  loadingAuthMessage: "",
+  toast: null,
   lastShiftAttempts: null,
   lastShiftAttemptLimit: null,
   lastShiftSucceeded: null,
@@ -1099,8 +1102,8 @@ const renderGroupCreation = () => `
       <div>
         <section class="controls">
           <div class="control-group">
-            <label>
-              グループ名
+            <label class="group-name-label">
+              <span class="label-title">グループ名<span class="required-marker">*</span></span>
               <input id="group-name" class="group-name-input" type="text" value="${state.groupDraftName}" list="group-suggestions" required />
             </label>
             <button class="primary" id="save-group" ${
@@ -1173,6 +1176,9 @@ const renderGroupList = () => `
       <div>
         <p class="eyebrow">グループ一覧</p>
         <h1>シフト管理</h1>
+      </div>
+      <div class="header-actions">
+        <span class="mode-pill">ログイン不要</span>
       </div>
     </header>
 
@@ -1488,6 +1494,30 @@ const renderConfirmDialog = () => `
   </dialog>
 `;
 
+const renderToast = () => {
+  if (!state.toast) return "";
+  return `
+    <div class="toast-container" role="status" aria-live="polite">
+      <div class="toast ${state.toast.type || "info"}">${state.toast.message}</div>
+    </div>
+  `;
+};
+
+const renderLoadingOverlay = () => {
+  if (!state.loadingShift && !state.loadingAuth) return "";
+  const message = state.loadingShift
+    ? "シフト作成中..."
+    : state.loadingAuthMessage || "処理中...";
+  return `
+    <div class="loading-overlay" role="status" aria-live="polite">
+      <div class="loading-card">
+        <span class="loading-spinner" aria-hidden="true"></span>
+        <p>${message}</p>
+      </div>
+    </div>
+  `;
+};
+
 const renderApp = () => {
   let content = "";
   if (state.view === "group") {
@@ -1503,6 +1533,9 @@ const renderApp = () => {
     ${renderSettingsDialog()}
     ${renderSheetDialog()}
     ${renderConfirmDialog()}
+    ${renderWarningDialog()}
+    ${renderToast()}
+    ${renderLoadingOverlay()}
   `;
 };
 
@@ -1558,6 +1591,13 @@ window.saveShiftSnapshot = ({
   ];
   persistState();
   renderApp();
+  showToast("保存しました。", "success");
+};
+
+window.notifyShiftSaved = () => {
+  state.view = "sheet";
+  renderApp();
+  showToast("保存しました。", "success");
 };
 
 const resetSavedSheet = (sheetId) => {
@@ -1604,6 +1644,60 @@ const closeDialog = (selector) => {
   if (dialog instanceof HTMLDialogElement) {
     dialog.close();
   }
+};
+
+const resetState = () => {
+  state.view = "login";
+  state.owner = { email: "", password: "" };
+  state.staff = structuredClone(initialStaff);
+  state.ownerMode = true;
+  state.sheet = null;
+  const persisted = loadPersistedState();
+  state.sheets = persisted?.sheets ?? [];
+  state.groups = persisted?.groups ?? [];
+  state.groupDraftName = "";
+  state.currentSheetId = null;
+  state.fixedDays = new Set();
+  state.fixedCells = new Set();
+  state.blockedDays = new Set();
+  state.shiftPreferences = [];
+  state.assignments = [];
+  state.shiftVersions = [];
+  state.warningMessage = "入力内容を確認してください。";
+  state.confirmMessage = "";
+  state.pendingShift = false;
+  state.loadingShift = false;
+  state.loadingAuth = false;
+  state.loadingAuthMessage = "";
+  state.toast = null;
+  state.lastShiftAttempts = null;
+  state.lastShiftAttemptLimit = null;
+  state.lastShiftSucceeded = null;
+  state.lastShiftError = "";
+  state.selectedGroup = "";
+  renderApp();
+};
+
+let toastTimeoutId = null;
+
+const showToast = (message, type = "info") => {
+  state.toast = { message, type };
+  if (state.view === "sheet") {
+    renderAppPreserveScroll();
+  } else {
+    renderApp();
+  }
+  if (toastTimeoutId) {
+    clearTimeout(toastTimeoutId);
+  }
+  toastTimeoutId = setTimeout(() => {
+    state.toast = null;
+    if (state.view === "sheet") {
+      renderAppPreserveScroll();
+    } else {
+      renderApp();
+    }
+  }, 3000);
 };
 
 const moveStaffRow = (rowIndex, direction) => {
@@ -1660,6 +1754,7 @@ const createShiftVersion = async ({ targetWindow } = {}) => {
     renderApp();
     const shortageCount = Array.isArray(lastResult?.warnings) ? lastResult.warnings.length : 0;
     state.lastShiftError = `この条件では${shortageCount}日分のシフトが埋まりません。夜勤・明け・勤務上限の制約により不足しています。`;
+    showToast("シフト作成に失敗しました。", "error");
     if (targetWindow) {
       targetWindow.close();
     }
@@ -1671,7 +1766,8 @@ const createShiftVersion = async ({ targetWindow } = {}) => {
   renderApp();
   const versionLabel = `ver${state.shiftVersions.length + 1}`;
   state.shiftVersions = [...state.shiftVersions, versionLabel];
-  openShiftVersionWindow(versionLabel, targetWindow ?? null, bestResult.assignments);
+  showToast("シフト作成に成功しました。", "success");
+  openShiftVersionWindow(versionLabel, targetWindow ?? null);
   return versionLabel;
 };
 
@@ -2063,6 +2159,108 @@ const openSettingsPanel = (rowIndex) => {
   panel.showModal();
 };
 
+const startGuestSession = () => {
+  state.view = "dashboard";
+  state.ownerMode = false;
+  setAuthToken("");
+  state.sheet = null;
+  state.currentSheetId = null;
+  state.selectedGroup = "";
+  const persisted = loadPersistedState();
+  state.groups = persisted?.groups ?? [];
+  state.sheets = persisted?.sheets ?? [];
+  renderApp();
+};
+
+const validateOwnerFields = () => {
+  const { email, password } = state.owner;
+  return email && password;
+};
+
+const syncOwnerState = async () => {
+  const remote = await loadRemoteState();
+  if (remote) {
+    state.groups = remote.groups;
+    state.sheets = remote.sheets;
+    return true;
+  }
+  if (persistedState) {
+    state.groups = persistedState.groups;
+    state.sheets = persistedState.sheets;
+  }
+  return false;
+};
+
+const loginOwner = async ({ email, password }) => {
+  if (state.apiStatus === "offline") {
+    state.warningMessage = getConnectionHelpMessage();
+    openDialog(".warning-dialog");
+    return;
+  }
+  state.loadingAuth = true;
+  state.loadingAuthMessage = "ログイン中...";
+  renderApp();
+  try {
+    const response = await apiRequest("/api/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password })
+    });
+    setAuthToken(response.token);
+    state.owner.email = response.email;
+    state.owner.password = "";
+    await syncOwnerState();
+    state.loadingAuth = false;
+    state.loadingAuthMessage = "";
+    startOwnerSession();
+    showToast("ログインしました。", "success");
+  } catch (error) {
+    state.loadingAuth = false;
+    state.loadingAuthMessage = "";
+    state.warningMessage =
+      error instanceof TypeError
+        ? getConnectionHelpMessage()
+        : error.message || "ログインに失敗しました。";
+    openDialog(".warning-dialog");
+  }
+};
+
+const registerOwner = async ({ email, password }) => {
+  if (state.apiStatus === "offline") {
+    state.warningMessage = getConnectionHelpMessage();
+    openDialog(".warning-dialog");
+    return;
+  }
+  state.loadingAuth = true;
+  state.loadingAuthMessage = "登録中...";
+  renderApp();
+  try {
+    await apiRequest("/api/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password })
+    });
+    state.loadingAuth = false;
+    state.loadingAuthMessage = "";
+    await loginOwner({ email, password });
+  } catch (error) {
+    state.loadingAuth = false;
+    state.loadingAuthMessage = "";
+    state.warningMessage =
+      error instanceof TypeError
+        ? getConnectionHelpMessage()
+        : error.message || "登録に失敗しました。";
+    openDialog(".warning-dialog");
+  }
+};
+
+const logoutOwner = async () => {
+  if (state.authToken) {
+    apiRequest("/api/logout", { method: "POST" }).catch(() => {});
+  }
+  setAuthToken("");
+  resetState();
+  showToast("ログアウトしました。", "success");
+};
+
 const openSheetFromList = (sheetId) => {
   const sheet = state.sheets.find((item) => item.id === sheetId);
   if (!sheet) return;
@@ -2123,7 +2321,10 @@ const openSheetFromList = (sheetId) => {
   renderApp();
 };
 
-const initApp = () => {
+const initApp = async () => {
+  await checkApiHealth();
+  setAuthToken("");
+  state.ownerMode = true;
   if (persistedState) {
     state.groups = persistedState.groups;
     state.sheets = persistedState.sheets;
@@ -2188,6 +2389,7 @@ document.body.addEventListener("click", (event) => {
     state.view = "dashboard";
     persistState();
     renderApp();
+    showToast("保存しました。", "success");
   }
 
   if (target.dataset.action === "edit-group") {

@@ -43,40 +43,12 @@
     <p id="error" style="color:red;"></p>
   </div>
 
-  <!-- ログイン後 -->
-  <div id="app" class="card hidden">
-    <h2 id="welcome"></h2>
-    <button onclick="logout()">ログアウト</button>
-  </div>
-
-  <script>
-    const API = window.SHIFT_API_BASE;
-    const tokenKey = "shift_token";
-
-    // ★ グローバルに生やす（Parcel対策）
-    window.login = async function () {
-      const emailVal = document.getElementById("email").value;
-      const passwordVal = document.getElementById("password").value;
-
-      const res = await fetch(API + "/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailVal, password: passwordVal })
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        document.getElementById("error").innerText = data.error;
-        return;
-      }
-
-      localStorage.setItem(tokenKey, data.token);
-      showApp(data.email);
-    };
-
-    window.register = async function () {
-      const emailVal = document.getElementById("email").value;
-      const passwordVal = document.getElementById("password").value;
+	<script>
+		window.SHIFT_API_BASE = "https://shiftmaker-yyq8.onrender.com";
+	</script>
+	<script src="src/index.js">
+	</script>
+</body>
 
       const res = await fetch(API + "/api/register", {
         method: "POST",
