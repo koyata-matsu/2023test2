@@ -1522,10 +1522,10 @@ const renderApp = () => {
   let content = "";
   if (state.view === "group") {
     content = renderGroupCreation();
-  } else if (state.view === "dashboard") {
-    content = renderDashboard();
   } else if (state.view === "sheet") {
     content = renderSheet();
+  } else {
+    content = renderDashboard();
   }
 
   app.innerHTML = `
