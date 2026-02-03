@@ -136,7 +136,7 @@ const createEmptyStaff = () => ({
 });
 
 const state = {
-  view: "login",
+  view: "dashboard",
   owner: {
     email: "",
     password: ""
@@ -160,6 +160,9 @@ const state = {
   confirmMessage: "",
   pendingShift: false,
   loadingShift: false,
+  loadingAuth: false,
+  loadingAuthMessage: "",
+  toast: null,
   lastShiftAttempts: null,
   lastShiftAttemptLimit: null,
   lastShiftSucceeded: null,
@@ -993,79 +996,9 @@ const renderSidePanel = () => `
   </aside>
 `;
 
-const renderLogin = () => `
-  <div class="page login">
-    <header class="app-header">
-      <div>
-        <p class="eyebrow">バイトシフト調整</p>
-        <h1>ログイン</h1>
-      </div>
-      <span class="${getApiStatusClass()}">${getApiStatusLabel()}</span>
-    </header>
-    <section class="card">
-      <label>
-        メールアドレス
-        <input id="owner-email" type="email" placeholder="owner@example.com" value="${
-          state.owner.email
-        }" />
-      </label>
-      <label>
-        パスワード
-        <input id="owner-password" type="password" placeholder="8文字以上" value="${
-          state.owner.password
-        }" />
-      </label>
-      <div class="button-row">
-        <button class="primary" id="login-owner">ログイン</button>
-        <button class="ghost" id="go-register">新規登録</button>
-        <button class="ghost" id="enter-guest">公開モードで閲覧</button>
-      </div>
-      <p class="helper-text">
-        ログインできない場合は公開モードで閲覧できます（編集はできません）。
-      </p>
-      <p class="helper-text">
-        ${state.apiStatus === "offline" ? getConnectionHelpMessage() : ""}
-      </p>
-      <p class="helper-text">別端末でも使うにはサーバー接続が必要です。</p>
-    </section>
-  </div>
-`;
+const renderLogin = () => "";
 
-const renderRegister = () => `
-  <div class="page login">
-    <header class="app-header">
-      <div>
-        <p class="eyebrow">バイトシフト調整</p>
-        <h1>新規登録</h1>
-      </div>
-      <div class="header-actions">
-        <span class="${getApiStatusClass()}">${getApiStatusLabel()}</span>
-        <button class="ghost" id="back-to-login">ログインへ戻る</button>
-      </div>
-    </header>
-    <section class="card">
-      <label>
-        メールアドレス
-        <input id="owner-email" type="email" placeholder="owner@example.com" value="${
-          state.owner.email
-        }" />
-      </label>
-      <label>
-        パスワード
-        <input id="owner-password" type="password" placeholder="8文字以上" value="${
-          state.owner.password
-        }" />
-      </label>
-      <div class="button-row">
-        <button class="primary" id="register-owner">登録する</button>
-      </div>
-      <p class="helper-text">
-        ${state.apiStatus === "offline" ? getConnectionHelpMessage() : ""}
-      </p>
-      <p class="helper-text">登録後、そのままログインして同期を開始します。</p>
-    </section>
-  </div>
-`;
+const renderRegister = () => "";
 
 const renderStaffRows = () => {
   return state.staff
@@ -1130,8 +1063,8 @@ const renderGroupCreation = () => `
       <div>
         <section class="controls">
           <div class="control-group">
-            <label>
-              グループ名
+            <label class="group-name-label">
+              <span class="label-title">グループ名<span class="required-marker">*</span></span>
               <input id="group-name" class="group-name-input" type="text" value="${state.groupDraftName}" list="group-suggestions" required />
             </label>
             <button class="primary" id="save-group" ${
@@ -1203,13 +1136,10 @@ const renderGroupList = () => `
     <header class="app-header">
       <div>
         <p class="eyebrow">グループ一覧</p>
-        <h1>${state.ownerMode ? state.owner.email || "シフト管理" : "公開モード"}</h1>
+        <h1>シフト管理</h1>
       </div>
       <div class="header-actions">
-        ${state.ownerMode
-          ? `<button class="ghost" id="logout">ログアウト</button>`
-          : `<button class="ghost" id="back-to-login">ログインへ戻る</button>`}
-        ${!state.ownerMode ? `<span class="mode-pill">閲覧専用</span>` : ""}
+        <span class="mode-pill">ログイン不要</span>
       </div>
     </header>
 
@@ -1529,12 +1459,36 @@ const renderConfirmDialog = () => `
   </dialog>
 `;
 
+const renderToast = () => {
+  if (!state.toast) return "";
+  return `
+    <div class="toast-container" role="status" aria-live="polite">
+      <div class="toast ${state.toast.type || "info"}">${state.toast.message}</div>
+    </div>
+  `;
+};
+
+const renderLoadingOverlay = () => {
+  if (!state.loadingShift && !state.loadingAuth) return "";
+  const message = state.loadingShift
+    ? "シフト作成中..."
+    : state.loadingAuthMessage || "処理中...";
+  return `
+    <div class="loading-overlay" role="status" aria-live="polite">
+      <div class="loading-card">
+        <span class="loading-spinner" aria-hidden="true"></span>
+        <p>${message}</p>
+      </div>
+    </div>
+  `;
+};
+
 const renderApp = () => {
   let content = "";
   if (state.view === "login") {
-    content = renderLogin();
+    content = renderDashboard();
   } else if (state.view === "register") {
-    content = renderRegister();
+    content = renderDashboard();
   } else if (state.view === "group") {
     content = renderGroupCreation();
   } else if (state.view === "dashboard") {
@@ -1548,6 +1502,9 @@ const renderApp = () => {
     ${renderSettingsDialog()}
     ${renderSheetDialog()}
     ${renderConfirmDialog()}
+    ${renderWarningDialog()}
+    ${renderToast()}
+    ${renderLoadingOverlay()}
   `;
 };
 
@@ -1599,11 +1556,13 @@ window.saveShiftResult = ({ sheetId, assignments, fixedCells, requiredDay, requi
   }
   persistState();
   renderApp();
+  showToast("保存しました。", "success");
 };
 
 window.notifyShiftSaved = () => {
   state.view = "sheet";
   renderApp();
+  showToast("保存しました。", "success");
 };
 
 const resetSavedSheet = (sheetId) => {
@@ -1653,7 +1612,7 @@ const closeDialog = (selector) => {
 };
 
 const resetState = () => {
-  state.view = "login";
+  state.view = "dashboard";
   state.owner = { email: "", password: "" };
   state.staff = structuredClone(initialStaff);
   state.ownerMode = true;
@@ -1673,12 +1632,37 @@ const resetState = () => {
   state.confirmMessage = "";
   state.pendingShift = false;
   state.loadingShift = false;
+  state.loadingAuth = false;
+  state.loadingAuthMessage = "";
+  state.toast = null;
   state.lastShiftAttempts = null;
   state.lastShiftAttemptLimit = null;
   state.lastShiftSucceeded = null;
   state.lastShiftError = "";
   state.selectedGroup = "";
   renderApp();
+};
+
+let toastTimeoutId = null;
+
+const showToast = (message, type = "info") => {
+  state.toast = { message, type };
+  if (state.view === "sheet") {
+    renderAppPreserveScroll();
+  } else {
+    renderApp();
+  }
+  if (toastTimeoutId) {
+    clearTimeout(toastTimeoutId);
+  }
+  toastTimeoutId = setTimeout(() => {
+    state.toast = null;
+    if (state.view === "sheet") {
+      renderAppPreserveScroll();
+    } else {
+      renderApp();
+    }
+  }, 3000);
 };
 
 const moveStaffRow = (rowIndex, direction) => {
@@ -1741,6 +1725,7 @@ const createShiftVersion = async ({ targetWindow } = {}) => {
     renderApp();
     const shortageCount = Array.isArray(lastResult?.warnings) ? lastResult.warnings.length : 0;
     state.lastShiftError = `この条件では${shortageCount}日分のシフトが埋まりません。夜勤・明け・勤務上限の制約により不足しています。`;
+    showToast("シフト作成に失敗しました。", "error");
     if (targetWindow) {
       targetWindow.close();
     }
@@ -1750,6 +1735,7 @@ const createShiftVersion = async ({ targetWindow } = {}) => {
   renderApp();
   const versionLabel = `ver${state.shiftVersions.length + 1}`;
   state.shiftVersions = [...state.shiftVersions, versionLabel];
+  showToast("シフト作成に成功しました。", "success");
   openShiftVersionWindow(versionLabel, targetWindow ?? null);
   return versionLabel;
 };
@@ -2251,12 +2237,6 @@ const openSettingsPanel = (rowIndex) => {
   panel.showModal();
 };
 
-const startOwnerSession = () => {
-  state.view = "dashboard";
-  state.ownerMode = true;
-  renderApp();
-};
-
 const startGuestSession = () => {
   state.view = "dashboard";
   state.ownerMode = false;
@@ -2295,6 +2275,9 @@ const loginOwner = async ({ email, password }) => {
     openDialog(".warning-dialog");
     return;
   }
+  state.loadingAuth = true;
+  state.loadingAuthMessage = "ログイン中...";
+  renderApp();
   try {
     const response = await apiRequest("/api/login", {
       method: "POST",
@@ -2304,8 +2287,13 @@ const loginOwner = async ({ email, password }) => {
     state.owner.email = response.email;
     state.owner.password = "";
     await syncOwnerState();
+    state.loadingAuth = false;
+    state.loadingAuthMessage = "";
     startOwnerSession();
+    showToast("ログインしました。", "success");
   } catch (error) {
+    state.loadingAuth = false;
+    state.loadingAuthMessage = "";
     state.warningMessage =
       error instanceof TypeError
         ? getConnectionHelpMessage()
@@ -2320,13 +2308,20 @@ const registerOwner = async ({ email, password }) => {
     openDialog(".warning-dialog");
     return;
   }
+  state.loadingAuth = true;
+  state.loadingAuthMessage = "登録中...";
+  renderApp();
   try {
     await apiRequest("/api/register", {
       method: "POST",
       body: JSON.stringify({ email, password })
     });
+    state.loadingAuth = false;
+    state.loadingAuthMessage = "";
     await loginOwner({ email, password });
   } catch (error) {
+    state.loadingAuth = false;
+    state.loadingAuthMessage = "";
     state.warningMessage =
       error instanceof TypeError
         ? getConnectionHelpMessage()
@@ -2341,6 +2336,7 @@ const logoutOwner = async () => {
   }
   setAuthToken("");
   resetState();
+  showToast("ログアウトしました。", "success");
 };
 
 const openSheetFromList = (sheetId) => {
@@ -2405,23 +2401,13 @@ const openSheetFromList = (sheetId) => {
 
 const initApp = async () => {
   await checkApiHealth();
-  if (state.authToken) {
-    try {
-      const profile = await apiRequest("/api/me");
-      state.owner.email = profile.email;
-      await syncOwnerState();
-      state.view = "dashboard";
-    } catch (error) {
-      setAuthToken("");
-      if (persistedState) {
-        state.groups = persistedState.groups;
-        state.sheets = persistedState.sheets;
-      }
-    }
-  } else if (persistedState) {
+  setAuthToken("");
+  state.ownerMode = true;
+  if (persistedState) {
     state.groups = persistedState.groups;
     state.sheets = persistedState.sheets;
   }
+  state.view = "dashboard";
   renderApp();
 };
 
@@ -2432,43 +2418,28 @@ document.body.addEventListener("click", (event) => {
   if (!(target instanceof HTMLElement)) return;
 
   if (target.id === "go-register") {
-    state.view = "register";
+    state.view = "dashboard";
     renderApp();
     return;
   }
 
   if (target.id === "back-to-login") {
-    state.view = "login";
+    state.view = "dashboard";
     renderApp();
     return;
   }
 
   if (target.id === "enter-guest") {
-    startGuestSession();
+    state.ownerMode = true;
+    state.view = "dashboard";
+    renderApp();
     return;
   }
 
   if (target.id === "login-owner" || target.id === "register-owner") {
-    const emailInput = document.getElementById("owner-email");
-    const passwordInput = document.getElementById("owner-password");
-    if (
-      emailInput instanceof HTMLInputElement &&
-      passwordInput instanceof HTMLInputElement
-    ) {
-      const email = emailInput.value.trim();
-      const password = passwordInput.value.trim();
-      state.owner = { email, password };
-      if (!validateOwnerFields()) {
-        state.warningMessage = "メールアドレスとパスワードを入力してください。";
-        openDialog(".warning-dialog");
-        return;
-      }
-      if (target.id === "register-owner") {
-        void registerOwner({ email, password });
-      } else {
-        void loginOwner({ email, password });
-      }
-    }
+    state.view = "dashboard";
+    renderApp();
+    return;
   }
 
   if (target.id === "create-group") {
@@ -2521,6 +2492,7 @@ document.body.addEventListener("click", (event) => {
     state.view = "dashboard";
     persistState();
     renderApp();
+    showToast("保存しました。", "success");
   }
 
   if (target.dataset.action === "edit-group") {
