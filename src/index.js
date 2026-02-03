@@ -1647,7 +1647,7 @@ const closeDialog = (selector) => {
 };
 
 const resetState = () => {
-  state.view = "login";
+  state.view = "dashboard";
   state.owner = { email: "", password: "" };
   state.staff = structuredClone(initialStaff);
   state.ownerMode = true;
